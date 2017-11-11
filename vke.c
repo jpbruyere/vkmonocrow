@@ -66,7 +66,7 @@ void vkeInitCmdPool (VkEngine* e, uint32_t buffCount){
     VkCommandPoolCreateInfo cmd_pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
                                               .pNext = NULL,
                                               .queueFamilyIndex = e->qFam,
-                                              .flags = 0 };
+                                              .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT };
     assert (vkCreateCommandPool(e->dev, &cmd_pool_info, NULL, &e->cmdPool) == VK_SUCCESS);
     VkCommandBufferAllocateInfo cmd = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                                         .pNext = NULL,
@@ -78,7 +78,9 @@ void vkeInitCmdPool (VkEngine* e, uint32_t buffCount){
 
 void createSwapChain (VkEngine* e, VkFormat preferedFormat){
     // Ensure all operations on the device have been finished before destroying resources
-    vkDeviceWaitIdle(e->dev);
+    vkDeviceWaitIdle(e->dev);    
+
+    VkSwapchainKHR oldSwapchain = e->swapChain;
 
     VkSurfaceCapabilitiesKHR surfCapabilities;
     VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(e->phy, e->surface, &surfCapabilities));
@@ -138,9 +140,23 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
                                             .preTransform = surfCapabilities.currentTransform,
                                             .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
                                             .presentMode = VK_PRESENT_MODE_FIFO_KHR,
-                                            .clipped = VK_TRUE};
+                                            .clipped = VK_TRUE,
+                                            .oldSwapchain = oldSwapchain};
 
     VK_CHECK_RESULT(vkCreateSwapchainKHR (e->dev, &createInfo, NULL, &e->swapChain));
+
+    if (oldSwapchain != VK_NULL_HANDLE)
+    {
+        for (uint32_t i = 0; i < e->imgCount; i++)
+        {
+            vkDestroyImageView(e->dev, e->ScBuffers[i].view, NULL);
+        }
+        vkDestroySwapchainKHR(e->dev, oldSwapchain, NULL);
+        free(e->ScBuffers);
+    }
+
+
+
     VK_CHECK_RESULT(vkGetSwapchainImagesKHR(e->dev, e->swapChain, &e->imgCount, NULL));
     assert (e->imgCount>0);
 
@@ -162,11 +178,11 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
         e->ScBuffers [i] = sc_buffer;
     }
     e->currentScBufferIndex = 0;
+    vkDeviceWaitIdle(e->dev);
 }
 
 
 void EngineInit (VkEngine* engine) {
-
     glfwInit();
     assert (glfwVulkanSupported()==GLFW_TRUE);
     engine->ExtensionNames = glfwGetRequiredInstanceExtensions (&engine->EnabledExtensionsCount);
@@ -218,12 +234,17 @@ void EngineInit (VkEngine* engine) {
     vkGetDeviceQueue(engine->dev, engine->qFam, 0, &engine->presentQueue);
 
     vkeInitCmdPool (engine, 1);
-    vkeBeginCmd (engine->cmdBuff);
 
     createSwapChain(engine, VK_FORMAT_B8G8R8A8_UNORM);
+
+    engine->semaPresentEnd = vkeCreateSemaphore(engine);
+    engine->semaDrawEnd = vkeCreateSemaphore(engine);
 }
 
 void EngineTerminate (VkEngine* engine) {
+
+    vkDestroySemaphore(engine->dev, engine->semaDrawEnd, NULL);
+    vkDestroySemaphore(engine->dev, engine->semaPresentEnd, NULL);
 
     vkFreeCommandBuffers (engine->dev, engine->cmdPool, 1, &engine->cmdBuff);
     vkDestroyCommandPool (engine->dev, engine->cmdPool, NULL);
@@ -242,11 +263,8 @@ void EngineTerminate (VkEngine* engine) {
     glfwTerminate ();
 }
 
-void set_image_layout(VkEngine* e, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout old_image_layout,
+void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout old_image_layout,
                       VkImageLayout new_image_layout, VkPipelineStageFlags src_stages, VkPipelineStageFlags dest_stages) {
-    assert(e->cmdBuff != VK_NULL_HANDLE);
-    assert(e->presentQueue != VK_NULL_HANDLE);
-
     VkImageMemoryBarrier image_memory_barrier = { .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                                                   .oldLayout = old_image_layout,
                                                   .newLayout = new_image_layout,
@@ -297,7 +315,7 @@ void set_image_layout(VkEngine* e, VkImage image, VkImageAspectFlags aspectMask,
             break;
     }
 
-    vkCmdPipelineBarrier(e->cmdBuff, src_stages, dest_stages, 0, 0, NULL, 0, NULL, 1, &image_memory_barrier);
+    vkCmdPipelineBarrier(cmdBuff, src_stages, dest_stages, 0, 0, NULL, 0, NULL, 1, &image_memory_barrier);
 }
 
 bool memory_type_from_properties(VkEngine* e, uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex) {
@@ -341,11 +359,152 @@ void vkeBeginCmd(VkCommandBuffer cmdBuff) {
 
     VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuff, &cmd_buf_info));
 }
+void vkeSubmitCmd(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence){
+    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                 .commandBufferCount = 1,
+                                 .pCommandBuffers = pCmdBuff};
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, fence));
+}
+void vkeSubmitDrawCmd(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore* pWaitSemaphore, VkSemaphore* pSignalSemaphore){
+    VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                 .commandBufferCount = 1,
+                                 .signalSemaphoreCount = 1,
+                                 .pSignalSemaphores = pSignalSemaphore,
+                                 .waitSemaphoreCount = 1,
+                                 .pWaitSemaphores = pWaitSemaphore,
+                                 .pWaitDstStageMask = &dstStageMask,
+                                 .pCommandBuffers = pCmdBuff};
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, NULL));
+}
 
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+}
+
+void draw(VkEngine* e, VkImage bltSrcImage) {
+    // Get the index of the next available swapchain image:
+    VkResult err = vkAcquireNextImageKHR(e->dev, e->swapChain, UINT64_MAX, e->semaPresentEnd, VK_NULL_HANDLE,
+                                &e->currentScBufferIndex);
+    if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)){
+        createSwapChain(e, VK_FORMAT_B8G8R8A8_UNORM);
+        return;
+    }
+
+    VK_CHECK_RESULT(err);
+
+
+    vkeBeginCmd (e->cmdBuff);
+    // We'll be blitting into the presentable image, set the layout accordingly
+    set_image_layout(e->cmdBuff, e->ScBuffers[e->currentScBufferIndex].image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    VkImage bltDstImage = e->ScBuffers[e->currentScBufferIndex].image;
+
+    // Do a 32x32 blit to all of the dst image - should get big squares
+    VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+                           .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+                           .srcOffsets[0] = {0,0,0},
+                           .dstOffsets[0] = {0,0,0},
+                           .srcOffsets[1] = {64,64,1},
+                           .dstOffsets[1] = {e->width,e->height,1} };
+
+    vkCmdBlitImage(e->cmdBuff, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1, &region, VK_FILTER_LINEAR);
+
+    // Use a barrier to make sure the blit is finished before the copy starts
+    set_image_layout(e->cmdBuff, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                            .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                            .srcOffset = {},
+                            .dstOffset = {0,256,0},
+                            .extent = {128,128,1}};
+    vkCmdCopyImage(e->cmdBuff, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1, &cregion);
+
+    set_image_layout(e->cmdBuff, e->ScBuffers[e->currentScBufferIndex].image, VK_IMAGE_ASPECT_COLOR_BIT,
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+
+    VK_CHECK_RESULT(vkEndCommandBuffer(e->cmdBuff));
+
+    vkeSubmitDrawCmd (e->presentQueue, &e->cmdBuff, &e->semaPresentEnd, &e->semaDrawEnd);
+
+    /* Now present the image in the window */
+    VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                                 .swapchainCount = 1,
+                                 .pSwapchains = &e->swapChain,
+                                 .waitSemaphoreCount = 1,
+                                 .pWaitSemaphores = &e->semaDrawEnd,
+                                 .pImageIndices = &e->currentScBufferIndex };
+
+    /* Make sure command buffer is finished before presenting */
+    //VK_CHECK_RESULT(vkWaitForFences(e.dev, 1, &drawFence, VK_TRUE, FENCE_TIMEOUT));
+    VK_CHECK_RESULT(vkQueuePresentKHR(e->presentQueue, &present));
+}
+
+VkImage loadImg(VkEngine* e, VkDeviceMemory* pMem){
+    VkImage image;
+    // Create an image, map it, and write some values to the image
+    VkImageCreateInfo image_info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                                     .imageType = VK_IMAGE_TYPE_2D,
+                                     .tiling = VK_IMAGE_TILING_LINEAR,
+                                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                     .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                     .format = e->format,
+                                     .extent = {e->width,e->height,1},
+                                     .mipLevels = 1,
+                                     .arrayLayers = 1,
+                                     .samples = NUM_SAMPLES };
+
+    VK_CHECK_RESULT(vkCreateImage(e->dev, &image_info, NULL, &image));
+
+    VkMemoryRequirements memReq;
+    vkGetImageMemoryRequirements(e->dev, image, &memReq);
+    VkMemoryAllocateInfo memAllocInfo = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                          .allocationSize = memReq.size };
+    assert(memory_type_from_properties(e, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                            &memAllocInfo.memoryTypeIndex));
+    VK_CHECK_RESULT(vkAllocateMemory(e->dev, &memAllocInfo, NULL, pMem));
+    VK_CHECK_RESULT(vkBindImageMemory(e->dev, image, *pMem, 0));
+
+    unsigned char *pImgMem;
+    VK_CHECK_RESULT(vkMapMemory(e->dev, *pMem, 0, memReq.size, 0, (void **)&pImgMem));
+    // Checkerboard of 8x8 pixel squares
+    for (int row = 0; row < e->height; row++) {
+        for (int col = 0; col < e->width; col++) {
+            unsigned char rgb = (((row & 0x8) == 0) ^ ((col & 0x8) == 0)) * 255;
+            pImgMem[0] = rgb;
+            pImgMem[1] = rgb;
+            pImgMem[2] = rgb;
+            pImgMem[3] = 255;
+            pImgMem += 4;
+        }
+    }
+    vkUnmapMemory(e->dev, *pMem);
+
+    vkeBeginCmd (e->cmdBuff);
+    // Intend to blit from this image, set the layout accordingly
+    set_image_layout(e->cmdBuff, image, VK_IMAGE_ASPECT_COLOR_BIT,
+                     VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                     VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+    VK_CHECK_RESULT(vkEndCommandBuffer(e->cmdBuff));
+
+    VkFence cmdFence = vkeCreateFence(e);
+    vkeSubmitCmd (e->presentQueue, &e->cmdBuff, cmdFence);
+    vkWaitForFences(e->dev, 1, &cmdFence, VK_TRUE, FENCE_TIMEOUT);
+
+    vkResetCommandBuffer(e->cmdBuff,0);
+    vkDestroyFence(e->dev, cmdFence, NULL);
+
+
+    return image;
 }
 
 int main(int argc, char *argv[]) {
@@ -357,137 +516,17 @@ int main(int argc, char *argv[]) {
 
     vkeCheckPhyPropBlitSource (&e);
 
-    VkImage bltSrcImage;
-    VkImage bltDstImage;
-
-    VkFence cmdFence = vkeCreateFence(&e);
-    VkFence drawFence = vkeCreateFence(&e);
-    VkSemaphore imageAcquiredSemaphore = vkeCreateSemaphore(&e);
-
-    // Create an image, map it, and write some values to the image
-    VkImageCreateInfo image_info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-                                     .imageType = VK_IMAGE_TYPE_2D,
-                                     .tiling = VK_IMAGE_TILING_LINEAR,
-                                     .initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
-                                     .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                     .format = e.format,
-                                     .extent = {e.width,e.height,1},
-                                     .mipLevels = 1,
-                                     .arrayLayers = 1,
-                                     .samples = NUM_SAMPLES };
-
-    VK_CHECK_RESULT(vkCreateImage(e.dev, &image_info, NULL, &bltSrcImage));
-
-    VkMemoryRequirements memReq;
-    vkGetImageMemoryRequirements(e.dev, bltSrcImage, &memReq);
-    VkMemoryAllocateInfo memAllocInfo = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                                          .allocationSize = memReq.size };
-    assert(memory_type_from_properties(&e, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                            &memAllocInfo.memoryTypeIndex));
     VkDeviceMemory dmem;
-    VK_CHECK_RESULT(vkAllocateMemory(e.dev, &memAllocInfo, NULL, &dmem));
-    VK_CHECK_RESULT(vkBindImageMemory(e.dev, bltSrcImage, dmem, 0));
-
-    unsigned char *pImgMem;
-    VK_CHECK_RESULT(vkMapMemory(e.dev, dmem, 0, memReq.size, 0, (void **)&pImgMem));
-    // Checkerboard of 8x8 pixel squares
-    for (int row = 0; row < e.height; row++) {
-        for (int col = 0; col < e.width; col++) {
-            unsigned char rgb = (((row & 0x8) == 0) ^ ((col & 0x8) == 0)) * 255;
-            pImgMem[0] = rgb;
-            pImgMem[1] = rgb;
-            pImgMem[2] = rgb;
-            pImgMem[3] = 255;
-            pImgMem += 4;
-        }
-    }
-    vkUnmapMemory(e.dev, dmem);
-
-    // Get the index of the next available swapchain image:
-    VK_CHECK_RESULT(vkAcquireNextImageKHR(e.dev, e.swapChain, UINT64_MAX, imageAcquiredSemaphore, VK_NULL_HANDLE,
-                                &e.currentScBufferIndex));
-    // We'll be blitting into the presentable image, set the layout accordingly
-    set_image_layout(&e, e.ScBuffers[e.currentScBufferIndex].image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-    // Intend to blit from this image, set the layout accordingly
-    set_image_layout(&e, bltSrcImage, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                     VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-    bltDstImage = e.ScBuffers[e.currentScBufferIndex].image;
-
-    // Do a 32x32 blit to all of the dst image - should get big squares
-    VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-                           .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-                           .srcOffsets[0] = {0,0,0},
-                           .dstOffsets[0] = {0,0,0},
-                           .srcOffsets[1] = {64,64,1},
-                           .dstOffsets[1] = {e.width,e.height,1} };
-
-    vkCmdBlitImage(e.cmdBuff, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1, &region, VK_FILTER_LINEAR);
-
-    // Use a barrier to make sure the blit is finished before the copy starts    
-    VkImageMemoryBarrier memBarrier = { .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                               .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                                               .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-                                               .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                               .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                               .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                               .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                               .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1},
-                                               .image = bltDstImage };
-
-    vkCmdPipelineBarrier(e.cmdBuff, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1,
-                         &memBarrier);
-
-    VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                            .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                            .srcOffset = {},
-                            .dstOffset = {0,256,0},
-                            .extent = {128,128,1}};
-    vkCmdCopyImage(e.cmdBuff, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1, &cregion);
-
-    VkImageMemoryBarrier prePresentBarrier = { .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                               .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                                               .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-                                               .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                               .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                               .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                               .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                               .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1},
-                                               .image = e.ScBuffers[e.currentScBufferIndex].image };
-
-    vkCmdPipelineBarrier(e.cmdBuff, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, NULL,
-                         0, NULL, 1, &prePresentBarrier);
-    VK_CHECK_RESULT(vkEndCommandBuffer(e.cmdBuff));
-
-
-    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                                 .commandBufferCount = 1,
-                                 .pCommandBuffers = &e.cmdBuff};
-    VK_CHECK_RESULT(vkQueueSubmit(e.presentQueue, 1, &submit_info, drawFence));
-    VK_CHECK_RESULT(vkQueueWaitIdle(e.presentQueue));
-
-    /* Now present the image in the window */
-    VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-                                 .swapchainCount = 1,
-                                 .pSwapchains = &e.swapChain,
-                                 .pImageIndices = &e.currentScBufferIndex };
-
-    /* Make sure command buffer is finished before presenting */
-    VK_CHECK_RESULT(vkWaitForFences(e.dev, 1, &drawFence, VK_TRUE, FENCE_TIMEOUT));
-    VK_CHECK_RESULT(vkQueuePresentKHR(e.presentQueue, &present));
+    VkImage bltSrcImage = loadImg(&e, &dmem);
 
     glfwSetKeyCallback(e.window, key_callback);
 
     while (!glfwWindowShouldClose(e.window)) {
         glfwPollEvents();
+        draw(&e, bltSrcImage);
+        VK_CHECK_RESULT(vkQueueWaitIdle(e.presentQueue));
     }
 
-    vkDestroySemaphore(e.dev, imageAcquiredSemaphore, NULL);
-    vkDestroyFence(e.dev, cmdFence, NULL);
-    vkDestroyFence(e.dev, drawFence, NULL);
     vkDestroyImage(e.dev, bltSrcImage, NULL);
     vkFreeMemory(e.dev, dmem, NULL);
 

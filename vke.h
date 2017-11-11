@@ -48,6 +48,9 @@ typedef struct VkEngine_t {
 
     VkSwapchainKHR swapChain;
 
+    VkSemaphore semaPresentEnd;
+    VkSemaphore semaDrawEnd;
+
     VkFormat format;
     uint32_t width;
     uint32_t height;
