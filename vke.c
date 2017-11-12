@@ -68,12 +68,6 @@ void vkeInitCmdPool (VkEngine* e, uint32_t buffCount){
                                               .queueFamilyIndex = e->qFam,
                                               .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT };
     assert (vkCreateCommandPool(e->dev, &cmd_pool_info, NULL, &e->cmdPool) == VK_SUCCESS);
-    VkCommandBufferAllocateInfo cmd = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-                                        .pNext = NULL,
-                                        .commandPool = e->cmdPool,
-                                        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                        .commandBufferCount = buffCount };
-    assert (vkAllocateCommandBuffers (e->dev, &cmd, &e->cmdBuff) == VK_SUCCESS);
 }
 
 void createSwapChain (VkEngine* e, VkFormat preferedFormat){
@@ -150,9 +144,11 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
         for (uint32_t i = 0; i < e->imgCount; i++)
         {
             vkDestroyImageView(e->dev, e->ScBuffers[i].view, NULL);
+            vkFreeCommandBuffers (e->dev, e->cmdPool, 1, &e->cmdBuffs[i]);
         }
         vkDestroySwapchainKHR(e->dev, oldSwapchain, NULL);
         free(e->ScBuffers);
+        free(e->cmdBuffs);
     }
 
 
@@ -164,6 +160,7 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
     VK_CHECK_RESULT(vkGetSwapchainImagesKHR(e->dev, e->swapChain, &e->imgCount,images));
 
     e->ScBuffers = (ImageBuffer*)malloc(sizeof(ImageBuffer)*e->imgCount);
+    e->cmdBuffs = (VkCommandBuffer*)malloc(sizeof(VkCommandBuffer)*e->imgCount);
 
     for (int i=0; i<e->imgCount; i++) {
         ImageBuffer sc_buffer;
@@ -176,11 +173,23 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
         assert (vkCreateImageView(e->dev, &createInfo, NULL, &sc_buffer.view) == VK_SUCCESS);
         sc_buffer.image = images[i];
         e->ScBuffers [i] = sc_buffer;
+        e->cmdBuffs [i] = vkeCreateCmdBuff(e, 1);
     }
     e->currentScBufferIndex = 0;
     vkDeviceWaitIdle(e->dev);
 }
 
+
+VkCommandBuffer vkeCreateCmdBuff (VkEngine* e, uint32_t buffCount){
+    VkCommandBuffer cmdBuff;
+    VkCommandBufferAllocateInfo cmd = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                                        .pNext = NULL,
+                                        .commandPool = e->cmdPool,
+                                        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                        .commandBufferCount = buffCount };
+    assert (vkAllocateCommandBuffers (e->dev, &cmd, &cmdBuff) == VK_SUCCESS);
+    return cmdBuff;
+}
 
 void EngineInit (VkEngine* engine) {
     glfwInit();
@@ -235,8 +244,6 @@ void EngineInit (VkEngine* engine) {
 
     vkeInitCmdPool (engine, 1);
 
-    createSwapChain(engine, VK_FORMAT_B8G8R8A8_UNORM);
-
     engine->semaPresentEnd = vkeCreateSemaphore(engine);
     engine->semaDrawEnd = vkeCreateSemaphore(engine);
 }
@@ -246,14 +253,13 @@ void EngineTerminate (VkEngine* engine) {
     vkDestroySemaphore(engine->dev, engine->semaDrawEnd, NULL);
     vkDestroySemaphore(engine->dev, engine->semaPresentEnd, NULL);
 
-    vkFreeCommandBuffers (engine->dev, engine->cmdPool, 1, &engine->cmdBuff);
-    vkDestroyCommandPool (engine->dev, engine->cmdPool, NULL);
-
     for (int i=0; i<engine->imgCount; i++){
         vkDestroyImageView (engine->dev, engine->ScBuffers[i].view, NULL);
-        //vkDestroyImage (engine->dev, engine->ScBuffers[i].image, NULL);
+        vkFreeCommandBuffers (engine->dev, engine->cmdPool, 1, &engine->cmdBuffs[i]);
     }
     free (engine->ScBuffers);
+    free (engine->cmdBuffs);
+    vkDestroyCommandPool (engine->dev, engine->cmdPool, NULL);
 
     vkDestroySwapchainKHR(engine->dev, engine->swapChain, NULL);
     vkDestroyDevice (engine->dev, NULL);
@@ -384,57 +390,63 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
 
+void buildCommandBuffers(VkEngine* e, VkImage bltSrcImage){
+
+    for (int i=0;i<e->imgCount;i++) {
+        VkImage bltDstImage = e->ScBuffers[i].image;
+
+        vkeBeginCmd (e->cmdBuffs[i]);
+        // We'll be blitting into the presentable image, set the layout accordingly
+        set_image_layout(e->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+
+        // Do a 32x32 blit to all of the dst image - should get big squares
+        VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+                               .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+                               .srcOffsets[0] = {0,0,0},
+                               .dstOffsets[0] = {0,0,0},
+                               .srcOffsets[1] = {64,64,1},
+                               .dstOffsets[1] = {e->width,e->height,1} };
+
+        vkCmdBlitImage(e->cmdBuffs[i], bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &region, VK_FILTER_LINEAR);
+
+        // Use a barrier to make sure the blit is finished before the copy starts
+        set_image_layout(e->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+        VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                .srcOffset = {},
+                                .dstOffset = {0,256,0},
+                                .extent = {128,128,1}};
+        vkCmdCopyImage(e->cmdBuffs[i], bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &cregion);
+
+        set_image_layout(e->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+
+        VK_CHECK_RESULT(vkEndCommandBuffer(e->cmdBuffs[i]));
+    }
+}
+
 void draw(VkEngine* e, VkImage bltSrcImage) {
     // Get the index of the next available swapchain image:
     VkResult err = vkAcquireNextImageKHR(e->dev, e->swapChain, UINT64_MAX, e->semaPresentEnd, VK_NULL_HANDLE,
                                 &e->currentScBufferIndex);
     if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)){
         createSwapChain(e, VK_FORMAT_B8G8R8A8_UNORM);
+        buildCommandBuffers(e, bltSrcImage);
         return;
     }
 
-    VK_CHECK_RESULT(err);
+    VK_CHECK_RESULT(err);    
 
-
-    vkeBeginCmd (e->cmdBuff);
-    // We'll be blitting into the presentable image, set the layout accordingly
-    set_image_layout(e->cmdBuff, e->ScBuffers[e->currentScBufferIndex].image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-    VkImage bltDstImage = e->ScBuffers[e->currentScBufferIndex].image;
-
-    // Do a 32x32 blit to all of the dst image - should get big squares
-    VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-                           .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-                           .srcOffsets[0] = {0,0,0},
-                           .dstOffsets[0] = {0,0,0},
-                           .srcOffsets[1] = {64,64,1},
-                           .dstOffsets[1] = {e->width,e->height,1} };
-
-    vkCmdBlitImage(e->cmdBuff, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1, &region, VK_FILTER_LINEAR);
-
-    // Use a barrier to make sure the blit is finished before the copy starts
-    set_image_layout(e->cmdBuff, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
-                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-    VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                            .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                            .srcOffset = {},
-                            .dstOffset = {0,256,0},
-                            .extent = {128,128,1}};
-    vkCmdCopyImage(e->cmdBuff, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1, &cregion);
-
-    set_image_layout(e->cmdBuff, e->ScBuffers[e->currentScBufferIndex].image, VK_IMAGE_ASPECT_COLOR_BIT,
-                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-
-    VK_CHECK_RESULT(vkEndCommandBuffer(e->cmdBuff));
-
-    vkeSubmitDrawCmd (e->presentQueue, &e->cmdBuff, &e->semaPresentEnd, &e->semaDrawEnd);
+    vkeSubmitDrawCmd (e->presentQueue, &e->cmdBuffs[e->currentScBufferIndex], &e->semaPresentEnd, &e->semaDrawEnd);
 
     /* Now present the image in the window */
     VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -489,20 +501,21 @@ VkImage loadImg(VkEngine* e, VkDeviceMemory* pMem){
     }
     vkUnmapMemory(e->dev, *pMem);
 
-    vkeBeginCmd (e->cmdBuff);
+    VkCommandBuffer cmdBuff = vkeCreateCmdBuff(e, 1);
+
+    vkeBeginCmd (cmdBuff);
     // Intend to blit from this image, set the layout accordingly
-    set_image_layout(e->cmdBuff, image, VK_IMAGE_ASPECT_COLOR_BIT,
+    set_image_layout(cmdBuff, image, VK_IMAGE_ASPECT_COLOR_BIT,
                      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                      VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-    VK_CHECK_RESULT(vkEndCommandBuffer(e->cmdBuff));
+    VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuff));
 
     VkFence cmdFence = vkeCreateFence(e);
-    vkeSubmitCmd (e->presentQueue, &e->cmdBuff, cmdFence);
+    vkeSubmitCmd (e->presentQueue, &cmdBuff, cmdFence);
     vkWaitForFences(e->dev, 1, &cmdFence, VK_TRUE, FENCE_TIMEOUT);
 
-    vkResetCommandBuffer(e->cmdBuff,0);
+    vkFreeCommandBuffers (e->dev, e->cmdPool, 1, &cmdBuff);
     vkDestroyFence(e->dev, cmdFence, NULL);
-
 
     return image;
 }
@@ -514,10 +527,16 @@ int main(int argc, char *argv[]) {
 
     EngineInit(&e);
 
+    createSwapChain(&e, VK_FORMAT_B8G8R8A8_UNORM);
+
     vkeCheckPhyPropBlitSource (&e);
+
 
     VkDeviceMemory dmem;
     VkImage bltSrcImage = loadImg(&e, &dmem);
+
+
+    buildCommandBuffers(&e, bltSrcImage);
 
     glfwSetKeyCallback(e.window, key_callback);
 

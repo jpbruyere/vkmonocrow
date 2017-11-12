@@ -37,8 +37,7 @@ typedef struct VkEngine_t {
     VkPhysicalDeviceProperties gpu_props;
     VkDevice dev;
     VkQueue presentQueue;
-    VkCommandPool cmdPool;
-    VkCommandBuffer cmdBuff;
+    VkCommandPool cmdPool;    
     uint32_t qFam;
     uint32_t EnabledExtensionsCount;
     const char** ExtensionNames;
@@ -58,6 +57,7 @@ typedef struct VkEngine_t {
     uint32_t imgCount;
     uint32_t currentScBufferIndex;
     ImageBuffer* ScBuffers;
+    VkCommandBuffer* cmdBuffs;
 }VkEngine;
 
 
@@ -66,7 +66,7 @@ void vkeFindQueueIdx (VkEngine* e, VkQueueFlags qType);
 
 VkFence vkeCreateFence (VkEngine* e);
 VkSemaphore vkeCreateSemaphore (VkEngine* e);
-
+VkCommandBuffer vkeCreateCmdBuff (VkEngine* e, uint32_t buffCount);
 
 bool vkeCheckPhyPropBlitSource (VkEngine *e);
 
