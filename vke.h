@@ -87,7 +87,9 @@ typedef struct VkComputePipeline_t {
     VkDescriptorPool descriptorPool;
     VkDescriptorSet descriptorSet;
     VkDescriptorSetLayout descriptorSetLayout;
-    VkBuffer buffer;
+    VkImage outImg;
+    VkImageView view;
+    VkSampler sampler;
     VkDeviceMemory bufferMemory;
     uint32_t bufferSize;
     VkCommandBuffer commandBuffer;

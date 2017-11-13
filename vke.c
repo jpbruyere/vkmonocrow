@@ -539,7 +539,6 @@ void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
         VkImage bltDstImage = r->ScBuffers[i].image;
 
         vkeBeginCmd (r->cmdBuffs[i]);
-        // We'll be blitting into the presentable image, set the layout accordingly
         set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
@@ -549,15 +548,15 @@ void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
         VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
                                .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
                                .srcOffsets[0] = {0,0,0},
+                               .srcOffsets[1] = {3200,2400,1},
                                .dstOffsets[0] = {0,0,0},
-                               .srcOffsets[1] = {64,64,1},
                                .dstOffsets[1] = {r->width,r->height,1} };
 
         vkCmdBlitImage(r->cmdBuffs[i], bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                        1, &region, VK_FILTER_LINEAR);
 
         // Use a barrier to make sure the blit is finished before the copy starts
-        set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
+        /*set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                          VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
@@ -567,7 +566,7 @@ void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
                                 .dstOffset = {0,256,0},
                                 .extent = {128,128,1}};
         vkCmdCopyImage(r->cmdBuffs[i], bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &cregion);
+                       1, &cregion);*/
 
         set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -679,24 +678,27 @@ int main(int argc, char *argv[]) {
 
     vkeCheckPhyPropBlitSource (&e);
 
-    VkeImage bltSrcImage = loadImg(&e);
-
-
-    buildCommandBuffers(&e.renderer, bltSrcImage.image);
 
     VkComputePipeline cp = createMandleBrot(&e);
     runCommandBuffer(&e, &cp);
+
+    //VkeImage bltSrcImage = loadImg(&e);
+    //VkeImage bltSrcImage = cp.outImg;
+
+
+    buildCommandBuffers(&e.renderer, cp.outImg);
+
 
     glfwSetKeyCallback(e.renderer.window, key_callback);
 
     while (!glfwWindowShouldClose(e.renderer.window)) {
         glfwPollEvents();
-        draw(&e, bltSrcImage.image);
+        draw(&e, cp.outImg);
         VK_CHECK_RESULT(vkQueueWaitIdle(e.renderer.presentQueue));
     }
 
 
-    vkeDestroyImage(&e,&bltSrcImage);
+    //vkeDestroyImage(&e,&bltSrcImage);
 
     cleanup(&e, &cp);
     EngineTerminate (&e);
