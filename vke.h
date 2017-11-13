@@ -4,9 +4,6 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
- #define STB_IMAGE_IMPLEMENTATION
- #include "stb_image.h"
-
 #define APP_SHORT_NAME "vulkansamples_instance"
 /* Number of samples needs to be the same at image creation,      */
 /* renderpass creation and pipeline creation.                     */
@@ -29,23 +26,18 @@ typedef struct ImageBuffer_t {
     VkImageView view;
 }ImageBuffer;
 
-typedef struct VkEngine_t {
-    VkApplicationInfo infos;
-    VkInstance inst;
-    VkPhysicalDevice phy;
-    VkPhysicalDeviceMemoryProperties memory_properties;
-    VkPhysicalDeviceProperties gpu_props;
-    VkDevice dev;
+typedef struct VkeImage_t {
+    VkImage image;
+    VkImageView view;
+    VkDeviceMemory mem;
+}VkeImage;
+
+typedef struct VkRenderer_t {
     VkQueue presentQueue;
-    VkCommandPool cmdPool;    
-    uint32_t qFam;
-    uint32_t EnabledExtensionsCount;
-    const char** ExtensionNames;
+    VkCommandPool cmdPool;
 
     GLFWwindow* window;
     VkSurfaceKHR surface;
-
-    VkSwapchainKHR swapChain;
 
     VkSemaphore semaPresentEnd;
     VkSemaphore semaDrawEnd;
@@ -56,17 +48,63 @@ typedef struct VkEngine_t {
 
     uint32_t imgCount;
     uint32_t currentScBufferIndex;
+
+    VkSwapchainKHR swapChain;
     ImageBuffer* ScBuffers;
     VkCommandBuffer* cmdBuffs;
+}VkRenderer;
+
+typedef struct VkLoader_t {
+    VkQueue queue;
+    VkCommandPool cmdPool;
+}VkLoader;
+
+typedef struct VkComputer_t {
+    VkQueue queue;
+    VkCommandPool cmdPool;
+}VkComputer;
+
+typedef struct VkEngine_t {
+    VkApplicationInfo infos;
+    VkInstance inst;
+    VkPhysicalDevice phy;
+    VkPhysicalDeviceMemoryProperties memory_properties;
+    VkPhysicalDeviceProperties gpu_props;
+    VkDevice dev;
+
+    uint32_t EnabledExtensionsCount;
+    const char** ExtensionNames;
+
+    VkRenderer renderer;
+    VkComputer computer;
+    VkLoader loader;
 }VkEngine;
 
+typedef struct VkComputePipeline_t {
+    VkPipeline pipeline;
+    VkPipelineLayout pipelineLayout;
+    VkShaderModule computeShaderModule;
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSet descriptorSet;
+    VkDescriptorSetLayout descriptorSetLayout;
+    VkBuffer buffer;
+    VkDeviceMemory bufferMemory;
+    uint32_t bufferSize;
+    VkCommandBuffer commandBuffer;
+    int width;
+    int height;
+    int work_size;
+}VkComputePipeline;
+
+void dumpLayerExts ();
+uint32_t* readFile(uint32_t* length, const char* filename);
+char *read_spv(const char *filename, size_t *psize);
 
 void vkeFindPhy (VkEngine* e, VkPhysicalDeviceType phyType);
-void vkeFindQueueIdx (VkEngine* e, VkQueueFlags qType);
 
-VkFence vkeCreateFence (VkEngine* e);
-VkSemaphore vkeCreateSemaphore (VkEngine* e);
-VkCommandBuffer vkeCreateCmdBuff (VkEngine* e, uint32_t buffCount);
+VkFence vkeCreateFence (VkDevice dev);
+VkSemaphore vkeCreateSemaphore (VkDevice dev);
+VkCommandBuffer vkeCreateCmdBuff (VkEngine* e, VkCommandPool cmdPool, uint32_t buffCount);
 
 bool vkeCheckPhyPropBlitSource (VkEngine *e);
 
