@@ -1,14 +1,12 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include <stdbool.h>
+
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-
+#include "utils.h"
 #include "vke.h"
 #include "compute.h"
+#include "vkeBuffer.h"
 
 #include "crow.h"
 
@@ -19,81 +17,11 @@ typedef struct VkePBO_t {
     uint8_t* map;
 }VkePBO;
 
-static VkePBO pbo;
 
-void dumpLayerExts () {
-    printf ("Layers:\n");
-    uint32_t instance_layer_count;
-    assert (vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL)==VK_SUCCESS);
-    if (instance_layer_count == 0)
-        return;
-    VkLayerProperties vk_props[instance_layer_count];
-    assert (vkEnumerateInstanceLayerProperties(&instance_layer_count, vk_props)==VK_SUCCESS);
+static VkeBuffer crowBuff;
 
-    for (uint32_t i = 0; i < instance_layer_count; i++) {
-        printf ("\t%s, %s\n", vk_props[i].layerName, vk_props[i].description);
-/*        res = init_global_extension_properties(layer_props);
-        if (res) return res;
-        info.instance_layer_properties.push_back(layer_props);*/
-    }
-}
 
-char *read_spv(const char *filename, size_t *psize) {
-    long int size;
-    size_t retval;
-    void *shader_code;
 
-#if (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
-    filename =[[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent: @(filename)].UTF8String;
-#endif
-
-    FILE *fp = fopen(filename, "rb");
-    if (!fp)
-        return NULL;
-
-    fseek(fp, 0L, SEEK_END);
-    size = ftell(fp);
-
-    fseek(fp, 0L, SEEK_SET);
-
-    shader_code = malloc(size);
-    retval = fread(shader_code, size, 1, fp);
-    assert(retval == 1);
-
-    *psize = size;
-
-    fclose(fp);
-    return shader_code;
-}
-
-// Read file into array of bytes, and cast to uint32_t*, then return.
-// The data has been padded, so that it fits into an array uint32_t.
-uint32_t* readFile(uint32_t* length, const char* filename) {
-
-    FILE* fp = fopen(filename, "rb");
-    if (fp == 0) {
-        printf("Could not find or open file: %s\n", filename);
-    }
-
-    // get file size.
-    fseek(fp, 0, SEEK_END);
-    long filesize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    long filesizepadded = (long)(ceil(filesize / 4.0)) * 4;
-
-    // read file contents.
-    char *str = (char*)malloc(filesizepadded*sizeof(char));
-    fread(str, filesize, sizeof(char), fp);
-    fclose(fp);
-
-    // data padding.
-    for (int i = filesize; i < filesizepadded; i++)
-        str[i] = 0;
-
-    *length = filesizepadded;
-    return (uint32_t *)str;
-}
 
 void vkeFindPhy (VkEngine* e, VkPhysicalDeviceType phyType) {
     uint32_t gpu_count = 0;
@@ -121,7 +49,22 @@ void vkeFindPhy (VkEngine* e, VkPhysicalDeviceType phyType) {
     exit (-1);
 }
 
-
+VkFence vkeCreateFence (VkDevice dev) {
+    VkFence fence;
+    VkFenceCreateInfo fenceInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                                    .pNext = NULL,
+                                    .flags = 0 };
+    VK_CHECK_RESULT(vkCreateFence(dev, &fenceInfo, NULL, &fence));
+    return fence;
+}
+VkSemaphore vkeCreateSemaphore (VkDevice dev) {
+    VkSemaphore semaphore;
+    VkSemaphoreCreateInfo info = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                                                           .pNext = NULL,
+                                                           .flags = 0};
+    VK_CHECK_RESULT(vkCreateSemaphore(dev, &info, NULL, &semaphore));
+    return semaphore;
+}
 VkCommandPool vkeCreateCmdPool (VkEngine* e, uint32_t qFamIndex){
     VkCommandPool cmdPool;
     VkCommandPoolCreateInfo cmd_pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -130,6 +73,98 @@ VkCommandPool vkeCreateCmdPool (VkEngine* e, uint32_t qFamIndex){
                                               .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT };
     assert (vkCreateCommandPool(e->dev, &cmd_pool_info, NULL, &cmdPool) == VK_SUCCESS);
     return cmdPool;
+}
+VkCommandBuffer vkeCreateCmdBuff (VkEngine* e, VkCommandPool cmdPool, uint32_t buffCount){
+    VkCommandBuffer cmdBuff;
+    VkCommandBufferAllocateInfo cmd = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                                        .pNext = NULL,
+                                        .commandPool = cmdPool,
+                                        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                        .commandBufferCount = buffCount };
+    assert (vkAllocateCommandBuffers (e->dev, &cmd, &cmdBuff) == VK_SUCCESS);
+    return cmdBuff;
+}
+
+void vkeBeginCmd(VkCommandBuffer cmdBuff) {
+    VkCommandBufferBeginInfo cmd_buf_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                                              .pNext = NULL,
+                                              .flags = 0,
+                                              .pInheritanceInfo = NULL };
+
+    VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuff, &cmd_buf_info));
+}
+void vkeSubmitCmd(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence){
+    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                 .commandBufferCount = 1,
+                                 .pCommandBuffers = pCmdBuff};
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, fence));
+}
+void vkeSubmitDrawCmd(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore* pWaitSemaphore, VkSemaphore* pSignalSemaphore){
+    VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                 .commandBufferCount = 1,
+                                 .signalSemaphoreCount = 1,
+                                 .pSignalSemaphores = pSignalSemaphore,
+                                 .waitSemaphoreCount = 1,
+                                 .pWaitSemaphores = pWaitSemaphore,
+                                 .pWaitDstStageMask = &dstStageMask,
+                                 .pCommandBuffers = pCmdBuff};
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, NULL));
+}
+
+void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout old_image_layout,
+                      VkImageLayout new_image_layout, VkPipelineStageFlags src_stages, VkPipelineStageFlags dest_stages) {
+    VkImageMemoryBarrier image_memory_barrier = { .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                                  .oldLayout = old_image_layout,
+                                                  .newLayout = new_image_layout,
+                                                  .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                                  .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                                  .image = image,
+                                                  .subresourceRange = {aspectMask,0,1,0,1}};
+
+    switch (old_image_layout) {
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            image_memory_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_PREINITIALIZED:
+            image_memory_barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+            break;
+
+        default:
+            break;
+    }
+
+    switch (new_image_layout) {
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            image_memory_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            break;
+
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            image_memory_barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            break;
+
+        default:
+            break;
+    }
+
+    vkCmdPipelineBarrier(cmdBuff, src_stages, dest_stages, 0, 0, NULL, 0, NULL, 1, &image_memory_barrier);
 }
 
 void createSwapChain (VkEngine* e, VkFormat preferedFormat){
@@ -240,18 +275,6 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
     }
     r->currentScBufferIndex = 0;
     vkDeviceWaitIdle(e->dev);
-}
-
-
-VkCommandBuffer vkeCreateCmdBuff (VkEngine* e, VkCommandPool cmdPool, uint32_t buffCount){
-    VkCommandBuffer cmdBuff;
-    VkCommandBufferAllocateInfo cmd = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-                                        .pNext = NULL,
-                                        .commandPool = cmdPool,
-                                        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                        .commandBufferCount = buffCount };
-    assert (vkAllocateCommandBuffers (e->dev, &cmd, &cmdBuff) == VK_SUCCESS);
-    return cmdBuff;
 }
 
 void EngineInit (VkEngine* e) {
@@ -395,7 +418,6 @@ void EngineInit (VkEngine* e) {
     r->semaPresentEnd = vkeCreateSemaphore(e->dev);
     r->semaDrawEnd = vkeCreateSemaphore(e->dev);
 }
-
 void EngineTerminate (VkEngine* e) {
     vkDeviceWaitIdle(e->dev);
     VkRenderer* r = &e->renderer;
@@ -423,131 +445,14 @@ void EngineTerminate (VkEngine* e) {
     vkDestroyInstance (e->inst, NULL);
 }
 
-void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout old_image_layout,
-                      VkImageLayout new_image_layout, VkPipelineStageFlags src_stages, VkPipelineStageFlags dest_stages) {
-    VkImageMemoryBarrier image_memory_barrier = { .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                                  .oldLayout = old_image_layout,
-                                                  .newLayout = new_image_layout,
-                                                  .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                                  .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                                  .image = image,
-                                                  .subresourceRange = {aspectMask,0,1,0,1}};
-
-    switch (old_image_layout) {
-        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-            image_memory_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-            image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_PREINITIALIZED:
-            image_memory_barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-            break;
-
-        default:
-            break;
-    }
-
-    switch (new_image_layout) {
-        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-            break;
-
-        default:
-            break;
-    }
-
-    vkCmdPipelineBarrier(cmdBuff, src_stages, dest_stages, 0, 0, NULL, 0, NULL, 1, &image_memory_barrier);
-}
-
-bool memory_type_from_properties(VkEngine* e, uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex) {
-    // Search memtypes to find first index with those properties
-    for (uint32_t i = 0; i < e->memory_properties.memoryTypeCount; i++) {
-        if ((typeBits & 1) == 1) {
-            // Type is available, does it match user properties?
-            if ((e->memory_properties.memoryTypes[i].propertyFlags & requirements_mask) == requirements_mask) {
-                *typeIndex = i;
-                return true;
-            }
-        }
-        typeBits >>= 1;
-    }
-    // No memory types matched, return failure
-    return false;
-}
-
-VkFence vkeCreateFence (VkDevice dev) {
-    VkFence fence;
-    VkFenceCreateInfo fenceInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                                    .pNext = NULL,
-                                    .flags = 0 };
-    VK_CHECK_RESULT(vkCreateFence(dev, &fenceInfo, NULL, &fence));
-    return fence;
-}
-VkSemaphore vkeCreateSemaphore (VkDevice dev) {
-    VkSemaphore semaphore;
-    VkSemaphoreCreateInfo info = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-                                                           .pNext = NULL,
-                                                           .flags = 0};
-    VK_CHECK_RESULT(vkCreateSemaphore(dev, &info, NULL, &semaphore));
-    return semaphore;
-}
-
-void vkeBeginCmd(VkCommandBuffer cmdBuff) {
-    VkCommandBufferBeginInfo cmd_buf_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                                              .pNext = NULL,
-                                              .flags = 0,
-                                              .pInheritanceInfo = NULL };
-
-    VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuff, &cmd_buf_info));
-}
-void vkeSubmitCmd(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence){
-    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                                 .commandBufferCount = 1,
-                                 .pCommandBuffers = pCmdBuff};
-    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, fence));
-}
-void vkeSubmitDrawCmd(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore* pWaitSemaphore, VkSemaphore* pSignalSemaphore){
-    VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                                 .commandBufferCount = 1,
-                                 .signalSemaphoreCount = 1,
-                                 .pSignalSemaphores = pSignalSemaphore,
-                                 .waitSemaphoreCount = 1,
-                                 .pWaitSemaphores = pWaitSemaphore,
-                                 .pWaitDstStageMask = &dstStageMask,
-                                 .pCommandBuffers = pCmdBuff};
-    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, NULL));
-}
-
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
-
 static void mouse_move_callback(GLFWwindow* window, double x, double y){
     crow_evt_enqueue(crow_create_evt(CROW_MOUSE_MOVE,(int)x,(int)y));
 }
-
 static void mouse_button_callback(GLFWwindow* window, int but, int state, int modif){
     if (state == GLFW_PRESS)
         crow_evt_enqueue(crow_create_evt(CROW_MOUSE_DOWN,but,0));
@@ -555,8 +460,7 @@ static void mouse_button_callback(GLFWwindow* window, int but, int state, int mo
         crow_evt_enqueue(crow_create_evt(CROW_MOUSE_UP,but,0));
 }
 
-
-void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
+void buildCommandBuffers(VkRenderer* r){
     for (int i=0;i<r->imgCount;i++) {
         VkImage bltDstImage = r->ScBuffers[i].image;
 
@@ -565,29 +469,10 @@ void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
+        VkBufferImageCopy bufferCopyRegion = { .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+                                               .imageExtent = {r->width,r->height,1}};
 
-        // Do a 32x32 blit to all of the dst image - should get big squares
-        /*VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-                               .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-                               .srcOffsets[0] = {0,0,0},
-                               .srcOffsets[1] = {r->width,r->height,1},
-                               .dstOffsets[0] = {0,0,0},
-                               .dstOffsets[1] = {r->width,r->height,1} };
-
-        vkCmdBlitImage(r->cmdBuffs[i], bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &region, VK_FILTER_LINEAR);*/
-
-        // Use a barrier to make sure the blit is finished before the copy starts
-        /*set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);*/
-        VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                .srcOffset = {0,0,0},
-                                .dstOffset = {0,0,0},
-                                .extent = {r->width,r->height,1}};
-        vkCmdCopyImage(r->cmdBuffs[i], bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &cregion);
+        vkCmdCopyBufferToImage(r->cmdBuffs[i], crowBuff.buffer, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
 
         set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -597,64 +482,26 @@ void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
     }
 }
 
-static int bmpStride;
-
-VkePBO createPBO (VkEngine* e){
-    VkePBO vi = {};
-    // Create an image, map it, and write some values to the image
-    VkImageCreateInfo image_info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-                                     .imageType = VK_IMAGE_TYPE_2D,
-                                     .tiling = VK_IMAGE_TILING_LINEAR,
-                                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                     .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                     .format = VK_FORMAT_R8G8B8A8_UNORM,
-                                     .extent = {e->renderer.width,e->renderer.height,1},
-                                     .mipLevels = 1,
-                                     .arrayLayers = 1,
-                                     .samples = NUM_SAMPLES };
-    VK_CHECK_RESULT(vkCreateImage(e->dev, &image_info, NULL, &vi.image));
-
-    VkMemoryRequirements memReq;
-    vkGetImageMemoryRequirements(e->dev, vi.image, &memReq);
-    VkMemoryAllocateInfo memAllocInfo = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                                          .allocationSize = memReq.size };
-    assert(memory_type_from_properties(e, memReq.memoryTypeBits,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                            &memAllocInfo.memoryTypeIndex));
-    VK_CHECK_RESULT(vkAllocateMemory(e->dev, &memAllocInfo, NULL, &vi.mem));
-    VK_CHECK_RESULT(vkBindImageMemory(e->dev, vi.image, vi.mem, 0));
-    VK_CHECK_RESULT(vkMapMemory(e->dev, vi.mem, 0, memReq.size, 0, (void **)&vi.map));
-
-    memset(vi.map,50,memReq.size);
-    bmpStride = memReq.size / e->renderer.height;
-    return vi;
+VkeBuffer createCrowStaggingBuff (VkEngine* e){
+    VkeBuffer buff = vke_buffer_create(e->dev, &e->memory_properties, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, e->renderer.width * e->renderer.height * 4);
+    vke_buffer_map(&buff);
+    return buff;
+}
+void destroyCrowStaggingBuf(VkeBuffer* buff){
+    vke_buffer_unmap(buff);
+    vke_buffer_destroy(buff);
 }
 
-void destroyPBO(VkEngine*e, VkePBO* pbo){
-    vkUnmapMemory(e->dev, pbo->mem);
-    vkDestroyImage(e->dev, pbo->image, NULL);
-    vkFreeMemory(e->dev, pbo->mem, NULL);
-}
-
-void copyCrowToVK(VkEngine* e){
-    if (pbo.image){
-        vkDestroyImage(e->dev, pbo.image, NULL);
-        vkFreeMemory(e->dev, pbo.mem, NULL);
-    }
-    pbo = createPBO(e);
-    memset(pbo.map,0,dirtyBmpSize);
-
-    vkUnmapMemory(e->dev, pbo.mem);
-}
 
 void checkCrow (VkEngine* e){
     if (crow_get_bmp()){
-        printf("Dirty:  (%d,%d,%d,%d)\n", dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
-        uintptr_t ptr = dirtyBmp, ptrDest = pbo.map + dirtyRect.y *bmpStride;
+        uintptr_t stride = e->renderer.width * 4;
+        uintptr_t ptr = dirtyBmp, ptrDest = crowBuff.mapped + dirtyRect.y * stride;
         for (int row = 0; row < dirtyRect.height; row++) {
-            memcpy(ptrDest + dirtyRect.x * 4, ptr, bmpStride);
+            memcpy(ptrDest + dirtyRect.x * 4, ptr, stride);
             ptr += dirtyRect.width * 4;
-            ptrDest += bmpStride;
+            ptrDest += stride;
         }
 
         vkDeviceWaitIdle(e->dev);
@@ -662,19 +509,19 @@ void checkCrow (VkEngine* e){
     }
 }
 
-void draw(VkEngine* e, VkImage bltSrcImage) {
+void draw(VkEngine* e) {
     VkRenderer* r = &e->renderer;
     // Get the index of the next available swapchain image:
     VkResult err = vkAcquireNextImageKHR(e->dev, r->swapChain, UINT64_MAX, r->semaPresentEnd, VK_NULL_HANDLE,
                                 &r->currentScBufferIndex);
     if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)){
         createSwapChain(e, VK_FORMAT_B8G8R8A8_UNORM);
-        destroyPBO(e,&pbo);
+        destroyCrowStaggingBuf(&crowBuff);
         Rectangle bounds = {0,0,e->renderer.width,e->renderer.height};
         crow_resize (bounds);
-        pbo = createPBO(e);
+        crowBuff = createCrowStaggingBuff(e);
         checkCrow(e);
-        buildCommandBuffers(r, pbo.image);
+        buildCommandBuffers(r);
         return;
     }
 
@@ -715,7 +562,7 @@ VkeImage loadImg(VkEngine* e){
     vkGetImageMemoryRequirements(e->dev, vi.image, &memReq);
     VkMemoryAllocateInfo memAllocInfo = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                                           .allocationSize = memReq.size };
-    assert(memory_type_from_properties(e, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    assert(memory_type_from_properties(&e->memory_properties, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                             &memAllocInfo.memoryTypeIndex));
     VK_CHECK_RESULT(vkAllocateMemory(e->dev, &memAllocInfo, NULL, &vi.mem));
     VK_CHECK_RESULT(vkBindImageMemory(e->dev, vi.image, vi.mem, 0));
@@ -771,13 +618,11 @@ int main(int argc, char *argv[]) {
 
     crow_init();
     Rectangle bounds = {0,0,e.renderer.width,e.renderer.height};
-    //crow_resize (bounds);
 
     vkeCheckPhyPropBlitSource (&e);
 
-
-    pbo = createPBO(&e);
-    buildCommandBuffers(&e.renderer, pbo.image);
+    crowBuff = createCrowStaggingBuff(&e);
+    buildCommandBuffers(&e.renderer);
 
     glfwSetKeyCallback(e.renderer.window, key_callback);
     glfwSetCursorPosCallback(e.renderer.window, mouse_move_callback);
@@ -788,13 +633,13 @@ int main(int argc, char *argv[]) {
 
     while (!glfwWindowShouldClose(e.renderer.window)) {
         glfwPollEvents();
-        draw(&e, pbo.image);
+        draw(&e);
         VK_CHECK_RESULT(vkQueueWaitIdle(e.renderer.presentQueue));
         checkCrow(&e);
         VK_CHECK_RESULT(vkDeviceWaitIdle(e.dev));
     }
 
-    destroyPBO(&e,&pbo);
+    destroyCrowStaggingBuf(&crowBuff);
     EngineTerminate (&e);
 
     return 0;

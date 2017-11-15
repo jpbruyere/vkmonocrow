@@ -42,5 +42,5 @@ pkg_check_modules (MONO2   mono-2)
 include_directories(${MONO2_INCLUDE_DIRS})
 link_directories(${MONO2_LIBRARY_DIRS})
 
-add_executable(${PROJECT_NAME} "vke.c" "compute.c" "crow.c" ${SHADERS})
+add_executable(${PROJECT_NAME} "vke.c" "compute.c" "crow.c" "vkeBuffer.c" "utils.c" ${SHADERS})
 target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} ${GLFW3_LIBRARY} ${MONO2_LIBRARIES})

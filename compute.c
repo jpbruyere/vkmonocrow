@@ -5,7 +5,7 @@
 #include <math.h>
 
 #include "compute.h"
-//#include "utils.h"
+#include "utils.h"
 
 void createBuffer(VkEngine* e, VkComputePipeline* cp) {
     // Create an image, map it, and write some values to the image

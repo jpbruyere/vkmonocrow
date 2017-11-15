@@ -1,6 +1,11 @@
 #ifndef VKE_H
 #define VKE_H
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include <stdbool.h>
+
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
@@ -9,17 +14,6 @@
 /* renderpass creation and pipeline creation.                     */
 #define NUM_SAMPLES VK_SAMPLE_COUNT_1_BIT
 #define FENCE_TIMEOUT 100000000
-
-// Used for validating return values of Vulkan API calls.
-#define VK_CHECK_RESULT(f) 																				\
-{																										\
-    VkResult res = (f);																					\
-    if (res != VK_SUCCESS)																				\
-    {																									\
-        printf("Fatal : VkResult is %d in %s at line %d\n", res,  __FILE__, __LINE__); \
-        assert(res == VK_SUCCESS);																		\
-    }																									\
-}
 
 typedef struct ImageBuffer_t {
     VkImage image;

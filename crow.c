@@ -96,7 +96,7 @@ void crow_load () {
 bool crow_get_bmp(){
     pthread_mutex_lock(&crow_dirty_mutex);
     if (dirtyBmp){
-        printf("Dirty:  (%d,%d,%d,%d)\n", dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
+        //printf("Dirty:  (%d,%d,%d,%d)\n", dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
         return TRUE;
     }
     pthread_mutex_unlock(&crow_dirty_mutex);
