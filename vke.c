@@ -503,8 +503,6 @@ void checkCrow (VkEngine* e){
             ptr += dirtyRect.width * 4;
             ptrDest += stride;
         }
-
-        vkDeviceWaitIdle(e->dev);
         crow_release_dirty_mutex();
     }
 }
@@ -520,8 +518,9 @@ void draw(VkEngine* e) {
         Rectangle bounds = {0,0,e->renderer.width,e->renderer.height};
         crow_resize (bounds);
         crowBuff = createCrowStaggingBuff(e);
-        checkCrow(e);
+        //checkCrow(e);
         buildCommandBuffers(r);
+        vkDeviceWaitIdle(e->dev);
         return;
     }
 
@@ -636,7 +635,6 @@ int main(int argc, char *argv[]) {
         draw(&e);
         VK_CHECK_RESULT(vkQueueWaitIdle(e.renderer.presentQueue));
         checkCrow(&e);
-        VK_CHECK_RESULT(vkDeviceWaitIdle(e.dev));
     }
 
     destroyCrowStaggingBuf(&crowBuff);
