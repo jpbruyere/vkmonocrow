@@ -10,6 +10,17 @@
 #include "vke.h"
 #include "compute.h"
 
+#include "crow.h"
+
+typedef struct VkePBO_t {
+    VkImage image;
+    VkImageView view;
+    VkDeviceMemory mem;
+    uint8_t* map;
+}VkePBO;
+
+static VkePBO pbo;
+
 void dumpLayerExts () {
     printf ("Layers:\n");
     uint32_t instance_layer_count;
@@ -533,8 +544,19 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
 
-void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
+static void mouse_move_callback(GLFWwindow* window, double x, double y){
+    crow_evt_enqueue(crow_create_evt(CROW_MOUSE_MOVE,(int)x,(int)y));
+}
 
+static void mouse_button_callback(GLFWwindow* window, int but, int state, int modif){
+    if (state == GLFW_PRESS)
+        crow_evt_enqueue(crow_create_evt(CROW_MOUSE_DOWN,but,0));
+    else
+        crow_evt_enqueue(crow_create_evt(CROW_MOUSE_UP,but,0));
+}
+
+
+void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
     for (int i=0;i<r->imgCount;i++) {
         VkImage bltDstImage = r->ScBuffers[i].image;
 
@@ -545,34 +567,98 @@ void buildCommandBuffers(VkRenderer* r, VkImage bltSrcImage){
 
 
         // Do a 32x32 blit to all of the dst image - should get big squares
-        VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+        /*VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
                                .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
                                .srcOffsets[0] = {0,0,0},
-                               .srcOffsets[1] = {3200,2400,1},
+                               .srcOffsets[1] = {r->width,r->height,1},
                                .dstOffsets[0] = {0,0,0},
                                .dstOffsets[1] = {r->width,r->height,1} };
 
         vkCmdBlitImage(r->cmdBuffs[i], bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &region, VK_FILTER_LINEAR);
+                       1, &region, VK_FILTER_LINEAR);*/
 
         // Use a barrier to make sure the blit is finished before the copy starts
         /*set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);*/
         VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
                                 .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                .srcOffset = {},
-                                .dstOffset = {0,256,0},
-                                .extent = {128,128,1}};
+                                .srcOffset = {0,0,0},
+                                .dstOffset = {0,0,0},
+                                .extent = {r->width,r->height,1}};
         vkCmdCopyImage(r->cmdBuffs[i], bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &cregion);*/
+                       1, &cregion);
 
         set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                          VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
         VK_CHECK_RESULT(vkEndCommandBuffer(r->cmdBuffs[i]));
+    }
+}
+
+static int bmpStride;
+
+VkePBO createPBO (VkEngine* e){
+    VkePBO vi = {};
+    // Create an image, map it, and write some values to the image
+    VkImageCreateInfo image_info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                                     .imageType = VK_IMAGE_TYPE_2D,
+                                     .tiling = VK_IMAGE_TILING_LINEAR,
+                                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                     .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                     .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                     .extent = {e->renderer.width,e->renderer.height,1},
+                                     .mipLevels = 1,
+                                     .arrayLayers = 1,
+                                     .samples = NUM_SAMPLES };
+    VK_CHECK_RESULT(vkCreateImage(e->dev, &image_info, NULL, &vi.image));
+
+    VkMemoryRequirements memReq;
+    vkGetImageMemoryRequirements(e->dev, vi.image, &memReq);
+    VkMemoryAllocateInfo memAllocInfo = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                          .allocationSize = memReq.size };
+    assert(memory_type_from_properties(e, memReq.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                            &memAllocInfo.memoryTypeIndex));
+    VK_CHECK_RESULT(vkAllocateMemory(e->dev, &memAllocInfo, NULL, &vi.mem));
+    VK_CHECK_RESULT(vkBindImageMemory(e->dev, vi.image, vi.mem, 0));
+    VK_CHECK_RESULT(vkMapMemory(e->dev, vi.mem, 0, memReq.size, 0, (void **)&vi.map));
+
+    memset(vi.map,50,memReq.size);
+    bmpStride = memReq.size / e->renderer.height;
+    return vi;
+}
+
+void destroyPBO(VkEngine*e, VkePBO* pbo){
+    vkUnmapMemory(e->dev, pbo->mem);
+    vkDestroyImage(e->dev, pbo->image, NULL);
+    vkFreeMemory(e->dev, pbo->mem, NULL);
+}
+
+void copyCrowToVK(VkEngine* e){
+    if (pbo.image){
+        vkDestroyImage(e->dev, pbo.image, NULL);
+        vkFreeMemory(e->dev, pbo.mem, NULL);
+    }
+    pbo = createPBO(e);
+    memset(pbo.map,0,dirtyBmpSize);
+
+    vkUnmapMemory(e->dev, pbo.mem);
+}
+
+void checkCrow (VkEngine* e){
+    if (crow_get_bmp()){
+        printf("Dirty:  (%d,%d,%d,%d)\n", dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
+        uintptr_t ptr = dirtyBmp, ptrDest = pbo.map + dirtyRect.y *bmpStride;
+        for (int row = 0; row < dirtyRect.height; row++) {
+            memcpy(ptrDest + dirtyRect.x * 4, ptr, bmpStride);
+            ptr += dirtyRect.width * 4;
+            ptrDest += bmpStride;
+        }
+
+        vkDeviceWaitIdle(e->dev);
+        crow_release_dirty_mutex();
     }
 }
 
@@ -583,7 +669,12 @@ void draw(VkEngine* e, VkImage bltSrcImage) {
                                 &r->currentScBufferIndex);
     if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)){
         createSwapChain(e, VK_FORMAT_B8G8R8A8_UNORM);
-        buildCommandBuffers(r, bltSrcImage);
+        destroyPBO(e,&pbo);
+        Rectangle bounds = {0,0,e->renderer.width,e->renderer.height};
+        crow_resize (bounds);
+        pbo = createPBO(e);
+        checkCrow(e);
+        buildCommandBuffers(r, pbo.image);
         return;
     }
 
@@ -650,7 +741,7 @@ VkeImage loadImg(VkEngine* e){
     // Intend to blit from this image, set the layout accordingly
     set_image_layout(cmdBuff, vi.image, VK_IMAGE_ASPECT_COLOR_BIT,
                      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                     VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+                     VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
     VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuff));
 
     VkFence cmdFence = vkeCreateFence(e->dev);
@@ -667,6 +758,8 @@ void vkeDestroyImage(VkEngine* e, VkeImage* img) {
     vkDestroyImage(e->dev, img->image, NULL);
     vkFreeMemory(e->dev, img->mem, NULL);
 }
+
+
 int main(int argc, char *argv[]) {
     dumpLayerExts();
 
@@ -676,31 +769,32 @@ int main(int argc, char *argv[]) {
 
     createSwapChain(&e, VK_FORMAT_B8G8R8A8_UNORM);
 
+    crow_init();
+    Rectangle bounds = {0,0,e.renderer.width,e.renderer.height};
+    //crow_resize (bounds);
+
     vkeCheckPhyPropBlitSource (&e);
 
 
-    VkComputePipeline cp = createMandleBrot(&e);
-    runCommandBuffer(&e, &cp);
-
-    //VkeImage bltSrcImage = loadImg(&e);
-    //VkeImage bltSrcImage = cp.outImg;
-
-
-    buildCommandBuffers(&e.renderer, cp.outImg);
-
+    pbo = createPBO(&e);
+    buildCommandBuffers(&e.renderer, pbo.image);
 
     glfwSetKeyCallback(e.renderer.window, key_callback);
+    glfwSetCursorPosCallback(e.renderer.window, mouse_move_callback);
+    glfwSetMouseButtonCallback(e.renderer.window, mouse_button_callback);
+
+    crow_load();
+    crow_resize (bounds);
 
     while (!glfwWindowShouldClose(e.renderer.window)) {
         glfwPollEvents();
-        draw(&e, cp.outImg);
+        draw(&e, pbo.image);
         VK_CHECK_RESULT(vkQueueWaitIdle(e.renderer.presentQueue));
+        checkCrow(&e);
+        VK_CHECK_RESULT(vkDeviceWaitIdle(e.dev));
     }
 
-
-    //vkeDestroyImage(&e,&bltSrcImage);
-
-    cleanup(&e, &cp);
+    destroyPBO(&e,&pbo);
     EngineTerminate (&e);
 
     return 0;

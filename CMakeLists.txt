@@ -3,6 +3,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 
 project(libvk)
 
+
 find_package(Vulkan REQUIRED)
 find_package(GLFW3 REQUIRED)
 
@@ -35,6 +36,11 @@ foreach(SHADER ${SHADERS})
 endforeach()
 add_custom_target(CompileShaders ALL DEPENDS ${SHADER_OUTPUTS})
 
+find_package(PkgConfig)
+pkg_check_modules (MONO2   mono-2)
 
-add_executable(${PROJECT_NAME} "vke.c" "compute.c")
-target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} ${GLFW3_LIBRARY})
+include_directories(${MONO2_INCLUDE_DIRS})
+link_directories(${MONO2_LIBRARY_DIRS})
+
+add_executable(${PROJECT_NAME} "vke.c" "compute.c" "crow.c" ${SHADERS})
+target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} ${GLFW3_LIBRARY} ${MONO2_LIBRARIES})

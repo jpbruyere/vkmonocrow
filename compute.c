@@ -117,7 +117,7 @@ void createDescriptorSet(VkEngine* e, VkComputePipeline* cp) {
 
 void createComputePipeline(VkEngine* e, VkComputePipeline* cp) {
     size_t filelength;
-    char* pCode = read_spv("shaders/shader.comp.spv", &filelength);
+    char* pCode = read_spv("shaders/shader2.comp.spv", &filelength);
     VkShaderModuleCreateInfo createInfo = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
                                             .pCode = pCode,
                                             .codeSize = filelength};
