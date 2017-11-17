@@ -1,13 +1,18 @@
-cmake_minimum_required(VERSION 3.7)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
+PROJECT(libvk)
 
-project(libvk)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
 
+SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
+SET(CMAKE_CXX_FLAGS "-W -Wall")
+SET(CMAKE_EXE_LINKER_FLAGS "-lm")
 
-find_package(Vulkan REQUIRED)
-find_package(GLFW3 REQUIRED)
+FIND_PACKAGE(Vulkan REQUIRED)
+FIND_PACKAGE(GLFW3 REQUIRED)
 
-set(CMAKE_EXE_LINKER_FLAGS "-lm")
+INCLUDE(FindPkgConfig)
+
+PKG_CHECK_MODULES(CAIRO REQUIRED cairo)
+PKG_CHECK_MODULES(MONO2 REQUIRED mono-2)
 
 # Find glslc shader compiler.
 # On Android, the NDK includes the binary, so no external dependency.
@@ -16,15 +21,15 @@ if(ANDROID)
 else()
 	file(GLOB glslc-folders ${VULKAN_SDK}/bin)
 endif()
-find_program(GLSLC glslc HINTS ${glslc-folders})
+FIND_PROGRAM(GLSLC glslc HINTS ${glslc-folders})
 
-set(SHADER_DIR "shaders")
-set(SHADER_FILES ${SHADER_DIR}/*.frag ${SHADER_DIR}/*.vert ${SHADER_DIR}/*.geom  ${SHADER_DIR}/*.comp)
-file(GLOB_RECURSE SHADERS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${SHADER_FILES})
-foreach(SHADER ${SHADERS})
-	set(shader-input ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER})
-	set(shader-output ${CMAKE_CURRENT_BINARY_DIR}/${SHADER}.spv)
-	add_custom_command (
+SET(SHADER_DIR "shaders")
+SET(SHADER_FILES ${SHADER_DIR}/*.frag ${SHADER_DIR}/*.vert ${SHADER_DIR}/*.geom  ${SHADER_DIR}/*.comp)
+FILE(GLOB_RECURSE SHADERS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${SHADER_FILES})
+FOREACH(SHADER ${SHADERS})
+    SET(shader-input ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER})
+	SET(shader-output ${CMAKE_CURRENT_BINARY_DIR}/${SHADER}.spv)
+	ADD_CUSTOM_COMMAND (
 	OUTPUT ${shader-output}
 	  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/${SHADER_DIR}"
 	  COMMAND ${GLSLC} ${shader-input} -o ${shader-output}
@@ -32,15 +37,23 @@ foreach(SHADER ${SHADERS})
 	  DEPENDS ${SHADER}
 	  VERBATIM
 	)
-    set(SHADER_OUTPUTS ${SHADER_OUTPUTS} ${shader-output})
-endforeach()
-add_custom_target(CompileShaders ALL DEPENDS ${SHADER_OUTPUTS})
+    SET(SHADER_OUTPUTS ${SHADER_OUTPUTS} ${shader-output})
+ENDFOREACH()
+ADD_CUSTOM_TARGET(CompileShaders ALL DEPENDS ${SHADER_OUTPUTS})
 
-find_package(PkgConfig)
-pkg_check_modules (MONO2   mono-2)
+INCLUDE_DIRECTORIES(
+	${MONO2_INCLUDE_DIRS}
+	${CAIRO_INCLUDE_DIRS}
+)
+LINK_DIRECTORIES(
+	${MONO2_LIBRARY_DIRS}
+	${CAIRO_LIBRARY_DIRS}
+)
 
-include_directories(${MONO2_INCLUDE_DIRS})
-link_directories(${MONO2_LIBRARY_DIRS})
-
-add_executable(${PROJECT_NAME} "vke.c" "compute.c" "crow.c" "vkeBuffer.c" "utils.c" ${SHADERS})
-target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} ${GLFW3_LIBRARY} ${MONO2_LIBRARIES})
+ADD_EXECUTABLE(${PROJECT_NAME} "vke.c" "compute.c" "crow.c" "vkeBuffer.c" "utils.c" ${SHADERS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME}
+	${Vulkan_LIBRARY}
+	${GLFW3_LIBRARY}
+	${MONO2_LIBRARIES}
+	${CAIRO_LIBRARIES}
+)

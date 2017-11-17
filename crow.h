@@ -41,22 +41,24 @@ CrowEvent* crow_evt_dequeue();
 bool crow_evt_pending ();
 
 typedef struct Rectangle_t {
-    uint32_t x,y,width,height;
+    int x,y,width,height;
 }Rectangle;
 
-extern Rectangle dirtyRect;
-extern uint8_t* dirtyBmp;
-extern size_t dirtyBmpSize;
+extern volatile uint32_t offsetY;
+extern volatile uint32_t length;
+extern volatile Rectangle dirtyRect;
+extern volatile uint8_t* dirtyBmp;
+extern volatile size_t dirtyBmpSize;
 
 extern int MouseX;
 extern int MouseY;
 extern int Events;
 
 void crow_init();
-void crow_resize (Rectangle bounds);
+void crow_resize (int width, int height);
 void crow_load ();
-bool crow_get_bmp();
-void crow_release_dirty_mutex();
+void crow_lock_update_mutex();
+void crow_release_update_mutex();
 
 
 #endif
