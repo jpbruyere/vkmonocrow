@@ -511,9 +511,21 @@ void EngineTerminate (VkEngine* e) {
 
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
+    if (action == GLFW_PRESS){
+        printf("scancode: %d",key);
+        fflush(stdout);
+        crow_evt_enqueue(crow_create_evt(CROW_KEY_DOWN,key,scancode));
+    }else if (action == GLFW_RELEASE)
+        crow_evt_enqueue(crow_create_evt(CROW_KEY_UP,key,scancode));
+
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
+
+static void char_callback (GLFWwindow* window, uint32_t c){
+    crow_evt_enqueue(crow_create_evt(CROW_KEY_PRESS,c,0));
+}
+
 static void mouse_move_callback(GLFWwindow* window, double x, double y){
     crow_evt_enqueue(crow_create_evt(CROW_MOUSE_MOVE,(int)x,(int)y));
 }
@@ -566,9 +578,11 @@ void destroyCrowStaggingBuf(VkeBuffer* buff){
 
 void checkCrow (){
     crow_lock_update_mutex();
-    if (length>0){
-        memcpy(crowBuff.mapped + offsetY, dirtyBmp + offsetY, length);
-        length = offsetY = 0;
+    if (dirtyLength>0){
+        if (dirtyLength+dirtyOffset>crowBuff.size)
+            dirtyLength = crowBuff.size - dirtyOffset;
+        memcpy(crowBuff.mapped + dirtyOffset, crowBuffer + dirtyOffset, dirtyLength);
+        dirtyLength = dirtyOffset = 0;
     }
     crow_release_update_mutex();
 }
@@ -580,12 +594,9 @@ void draw(VkEngine* e) {
                                 &r->currentScBufferIndex);
     if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)){
         createSwapChain(e, VK_FORMAT_B8G8R8A8_UNORM);
-        crow_lock_update_mutex();
+        crow_evt_enqueue(crow_create_evt(CROW_RESIZE,e->renderer.width,e->renderer.height));
         destroyCrowStaggingBuf(&crowBuff);
-        crow_resize (e->renderer.width,e->renderer.height);
         crowBuff = createCrowStaggingBuff(e);
-        crow_release_update_mutex();
-
         buildCommandBuffers(r);
         vkDeviceWaitIdle(e->dev);
         return;
@@ -625,13 +636,13 @@ int main(int argc, char *argv[]) {
     buildCommandBuffers(&e.renderer);
 
     glfwSetKeyCallback(e.renderer.window, key_callback);
+    glfwSetCharCallback(e.renderer.window, char_callback);
     glfwSetCursorPosCallback(e.renderer.window, mouse_move_callback);
     glfwSetMouseButtonCallback(e.renderer.window, mouse_button_callback);
 
+    crow_evt_enqueue(crow_create_evt(CROW_RESIZE,e.renderer.width,e.renderer.height));
+
     crow_load();
-    crow_release_update_mutex();
-    crow_resize (e.renderer.width,e.renderer.height);
-    crow_release_update_mutex();
 
     while (!glfwWindowShouldClose(e.renderer.window)) {
         glfwPollEvents();

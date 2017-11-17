@@ -427,7 +427,7 @@ void main_loop(){
             mono_runtime_invoke (loadiface, obj, &str, &exception);
             loadFlag = FALSE;
             pthread_mutex_unlock(&crow_load_mutex);
-        }else if (cpt>10000000){
+        }else if (cpt>1000){
             mono_runtime_invoke (update, obj, NULL, &exception);
             cpt=0;
         }
