@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+#include "crow_event.h"
+
 #ifndef bool
 #define bool uint8_t
 #endif
@@ -20,32 +22,6 @@
 #ifndef TRUE
 #define TRUE 1
 #endif
-
-#define CROW_MOUSE_EVT      0b00000100
-#define CROW_MOUSE_MOVE     0b00000100
-#define CROW_MOUSE_UP       0b00000101
-#define CROW_MOUSE_DOWN     0b00000110
-#define CROW_MOUSE_WHEEL    0b00000111
-#define CROW_KEY_EVT        0b00001000
-#define CROW_KEY_UP         0b00001000
-#define CROW_KEY_DOWN       0b00001001
-#define CROW_KEY_PRESS      0b00001010
-#define CROW_RESIZE         0b00010000
-
-//extern pthread_mutex_t crow_resize_mutex;
-
-typedef struct CrowEvent_t {
-    uint32_t eventType;
-    uint32_t data0;
-    uint32_t data1;
-    struct CrowEvent * pNext;
-}CrowEvent;
-
-
-CrowEvent* crow_evt_create(uint32_t eventType, uint32_t data0, uint32_t data1);
-void crow_evt_enqueue(CrowEvent *pEvt);
-CrowEvent* crow_evt_dequeue();
-bool crow_evt_pending ();
 
 typedef struct Rectangle_t {
     int x,y,width,height;
