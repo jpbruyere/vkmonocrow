@@ -1,113 +1,10 @@
-#include "crow.h"
+#include <mono/jit/jit.h>
+#include <mono/metadata/threads.h>
+#include <mono/metadata/object.h>
+#include <mono/metadata/environment.h>
+#include <mono/metadata/assembly.h>
+#include <mono/metadata/debug-helpers.h>
 #include "cairo.h"
-
-static MonoDomain *domain;
-static MonoAssembly *assembly;
-static MonoImage *image;
-static MonoClass *klass;
-static MonoObject *obj;
-static MonoMethod *loadiface = NULL, *resize = NULL, *update = NULL,
-                    *mouseMove = NULL, *mouseUp = NULL, *mouseDown = NULL,
-                    *keyPress = NULL, *keyDown = NULL, *keyUp = NULL;
-
-static MonoClassField *fldIsDirty = NULL, *fldDirtyRect = NULL, *fldDirtyBmp = NULL;
-
-
-static pthread_t crowThread;
-pthread_mutex_t crow_load_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t crow_update_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t crow_event_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-static uint8_t needResize = FALSE;
-static uint8_t loadFlag = FALSE; //true when a file is triggered to be loaded
-static cairo_rectangle_int_t crowBuffBounds;
-static char* fileName = NULL;
-
-volatile uint8_t* crowBuffer = NULL;
-volatile uint32_t dirtyOffset = 0;
-volatile uint32_t dirtyLength = 0;
-
-static CrowEvent * crow_evt_queue_start = NULL;
-static CrowEvent * crow_evt_queue_end = NULL;
-
-CrowEvent* crow_create_evt(uint32_t eventType, uint32_t data0, uint32_t data1){
-    CrowEvent* pEvt = (CrowEvent*)malloc(sizeof(CrowEvent));
-    pEvt->eventType = eventType;
-    pEvt->data0 = data0;
-    pEvt->data1 = data1;
-    pEvt->pNext = NULL;
-    return pEvt;
-}
-
-void crow_evt_enqueue(CrowEvent *pEvt){
-    pthread_mutex_lock(&crow_event_mutex);
-    if (crow_evt_queue_end){
-        crow_evt_queue_end->pNext = pEvt;
-        crow_evt_queue_end = pEvt;
-    }else{
-        crow_evt_queue_start = pEvt;
-        crow_evt_queue_end = pEvt;
-    }
-    pthread_mutex_unlock(&crow_event_mutex);
-}
-
-CrowEvent* crow_evt_dequeue(){
-    pthread_mutex_lock(&crow_event_mutex);
-    CrowEvent* next = crow_evt_queue_start;
-    if (next){
-        if (crow_evt_queue_start->pNext)
-            crow_evt_queue_start = crow_evt_queue_start->pNext;
-        else
-            crow_evt_queue_start = crow_evt_queue_end = NULL;
-    }
-    pthread_mutex_unlock(&crow_event_mutex);
-    return next;
-}
-
-bool crow_evt_pending () {
-    return (bool)(crow_evt_queue_start!=NULL);
-}
-
-void printException (MonoObject* exc){
-    MonoMethodDesc* mdesc = mono_method_desc_new (":ToString()", FALSE);
-    MonoClass* klass = mono_get_exception_class();
-    MonoMethod* toString = mono_method_desc_search_in_class(mdesc,klass);
-
-    MonoString* str = (MonoString*)mono_runtime_invoke (toString, exc, NULL, NULL);
-    char* p = mono_string_to_utf8 (str);
-    printf ("Error: %s\n", p);
-    mono_free (p);
-}
-
-void crow_buffer_resize (uint32_t width, uint32_t height){
-    crow_lock_update_mutex();
-    crowBuffBounds.width = width;
-    crowBuffBounds.height = height;
-    if(crowBuffer)
-        free(crowBuffer);
-    size_t buffSize = (size_t)(crowBuffBounds.width*crowBuffBounds.height*4);
-    crowBuffer = (uint8_t*)malloc(buffSize);
-    /*printf("resize: (%d,%d), bmpPtr:%lu, length=%lu\n",width,height,
-           dirtyBmp, dirtyBmpSize);
-    fflush(stdout);*/
-    dirtyLength = dirtyOffset = 0;
-    crow_release_update_mutex();
-}
-
-void crow_load () {
-    while(loadFlag)
-        continue;
-    pthread_mutex_lock(&crow_load_mutex);
-    loadFlag = TRUE;
-    pthread_mutex_unlock(&crow_load_mutex);
-}
-
-void crow_lock_update_mutex(){
-    pthread_mutex_lock(&crow_update_mutex);
-}
-void crow_release_update_mutex(){
-    pthread_mutex_unlock(&crow_update_mutex);
-}
 
 void crow_cairo_region_clear(cairo_t *ctx, cairo_region_t *reg){
     for (int i = 0; i < cairo_region_num_rectangles(reg); ++i) {
@@ -120,42 +17,6 @@ void crow_cairo_region_clear(cairo_t *ctx, cairo_region_t *reg){
     cairo_fill (ctx);
     cairo_set_operator(ctx, CAIRO_OPERATOR_OVER);
 }
-
-void crow_mono_update (cairo_region_t* reg, MonoArray* bmp){
-    crow_lock_update_mutex();
-
-    /*if (needResize){
-        crow_release_update_mutex();
-        return;
-    }*/
-
-    cairo_rectangle_int_t dirtyRect = {};
-    cairo_region_get_extents(reg, &dirtyRect);
-
-    if (dirtyRect.x < 0)
-        dirtyRect.x = 0;
-    if (dirtyRect.y < 0)
-        dirtyRect.y = 0;
-    if (dirtyRect.width + dirtyRect.x > crowBuffBounds.width)
-        dirtyRect.width = crowBuffBounds.width - dirtyRect.x;
-    if (dirtyRect.height + dirtyRect.y > crowBuffBounds.height)
-        dirtyRect.height = crowBuffBounds.height - dirtyRect.y;
-
-    uint8_t* ptrBmp = (uint8_t*)mono_array_addr(bmp,uint8_t,0);
-    int stride = crowBuffBounds.width * 4;
-    dirtyOffset = dirtyRect.y * stride;
-    dirtyLength = dirtyRect.height * stride;
-
-    /*printf("update: (%d,%d,%d,%d),offset=%d, length=%d, bmpPtr:%lu, dirtyPtr=%lu\n",dirtyRect.x,
-           dirtyRect.y,dirtyRect.width,dirtyRect.height,dirtyOffset,dirtyLength,
-           crowBuffer, ptrBmp);*/
-    fflush(stdout);
-
-    memcpy(crowBuffer + dirtyOffset, ptrBmp + dirtyOffset, dirtyLength);
-
-    crow_release_update_mutex();
-}
-
 void mono_cairo_show_text (cairo_t* ctx, MonoString* txt){
     char *p = mono_string_to_utf8 (txt);
     cairo_show_text(ctx, p);
@@ -171,11 +32,11 @@ void mono_cairo_select_font_face (cairo_t* cr, MonoString* family, cairo_font_sl
     cairo_select_font_face(cr,p,slant,weight);
     mono_free (p);
 }
-mono_cairo_set_font_matrix (cairo_t* cr, const cairo_matrix_t *matrix) {
+void mono_cairo_set_font_matrix (cairo_t* cr, const cairo_matrix_t *matrix) {
     cairo_set_font_matrix(cr, matrix);
 }
+
 void embed_cairo_init() {
-    mono_add_internal_call ("Crow.Interface::crow_mono_update", crow_mono_update);
     mono_add_internal_call ("Cairo.NativeMethods::crow_cairo_region_clear", crow_cairo_region_clear);
 
     mono_add_internal_call ("Cairo.NativeMethods::cairo_create", cairo_create);
@@ -377,142 +238,3 @@ void embed_cairo_init() {
     mono_add_internal_call ("Cairo.NativeMethods::cairo_version", cairo_version);
     mono_add_internal_call ("Cairo.NativeMethods::cairo_version_string", cairo_version_string);
 }
-
-void main_loop(){
-    int cpt = 0;
-    while(1){
-        cpt++;
-        MonoObject *exception = NULL;
-
-        if (crow_evt_pending()){
-            CrowEvent* evt = crow_evt_dequeue();
-            if (evt->eventType & CROW_MOUSE_EVT){
-                if (evt->eventType == CROW_MOUSE_MOVE){
-                    void* args[2];
-                    args[0] = &evt->data0;
-                    args[1] = &evt->data1;
-                    mono_runtime_invoke (mouseMove, obj, args, &exception);
-                }else if (evt->eventType == CROW_MOUSE_DOWN){
-                    void* args[1];
-                    args[0] = &evt->data0;
-                    mono_runtime_invoke (mouseDown, obj, args, &exception);
-                }else if (evt->eventType == CROW_MOUSE_UP){
-                    void* args[1];
-                    args[0] = &evt->data0;
-                    mono_runtime_invoke (mouseUp, obj, args, &exception);
-                }
-            }else if (evt->eventType & CROW_KEY_EVT){
-                void* args[1];
-                args[0] = &evt->data1;
-                //args[1] = &evt->data1;
-                if (evt->eventType == CROW_KEY_DOWN)
-                    mono_runtime_invoke (keyDown, obj, args, &exception);
-                else if (evt->eventType == CROW_KEY_UP)
-                    mono_runtime_invoke (keyUp, obj, args, &exception);
-                else if (evt->eventType == CROW_KEY_PRESS){
-                    args[0] = &evt->data0;
-                    mono_runtime_invoke (keyPress, obj, args, &exception);
-                }
-            }else if (evt->eventType & CROW_RESIZE){
-                crow_buffer_resize(evt->data0,evt->data1);
-                void* args[1];
-                args[0] = &crowBuffBounds;
-                mono_runtime_invoke (resize, obj, args, &exception);
-            }
-            free(evt);
-        }else if (loadFlag){
-            pthread_mutex_lock(&crow_load_mutex);
-            //MonoString *str = mono_string_new (domain, "/mnt/devel/gts/libvk/crow/Tests/Interfaces/GraphicObject/0.crow");
-            MonoString *str = mono_string_new (domain, "/mnt/devel/gts/libvk/crow/Tests/Interfaces/Divers/0.crow");
-            mono_runtime_invoke (loadiface, obj, &str, &exception);
-            loadFlag = FALSE;
-            pthread_mutex_unlock(&crow_load_mutex);
-        }else if (cpt>1000){
-            mono_runtime_invoke (update, obj, NULL, &exception);
-            cpt=0;
-        }
-
-        if (exception)
-            printException(exception);
-    }
-}
-
-void* crow_thread (void *arg) {
-    printf ("Crow Interface Thread\n");
-
-    int retval;
-    const char *crowDllPath = "/mnt/devel/gts/libvk/crow/build/Debug/Crow.dll";
-
-    domain = mono_jit_init (crowDllPath);
-    mono_config_parse ("/etc/mono/config");
-    assembly = mono_domain_assembly_open (domain, crowDllPath);
-
-    if (!assembly)
-        return EXIT_FAILURE;
-
-    image = mono_assembly_get_image (assembly);
-
-    embed_cairo_init();
-
-    klass = mono_class_from_name (image, "Crow", "Interface");
-    if (!klass) {
-        fprintf (stderr, "Can't find Interface in assembly %s\n", mono_image_get_filename (image));
-        exit (1);
-    }
-
-    MonoMethod *m = NULL,
-            *ctor = NULL;
-
-    void* iter = NULL;
-    while ((m = mono_class_get_methods (klass, &iter))) {
-        if (strcmp (mono_method_get_name (m), ".ctor") == 0)
-            ctor = m;
-        else if (strcmp (mono_method_get_name (m), "LoadInterface") == 0)
-            loadiface = m;
-        else if (strcmp (mono_method_get_name (m), "Update") == 0)
-            update = m;
-        else if (strcmp (mono_method_get_name (m), "ProcessResize") == 0)
-            resize = m;
-        else if (strcmp (mono_method_get_name (m), "ProcessMouseMove") == 0)
-            mouseMove = m;
-        else if (strcmp (mono_method_get_name (m), "ProcessMouseButtonDown") == 0)
-            mouseDown = m;
-        else if (strcmp (mono_method_get_name (m), "ProcessMouseButtonUp") == 0)
-            mouseUp = m;
-        else if (strcmp (mono_method_get_name (m), "ProcessKeyUp") == 0)
-            keyUp = m;
-        else if (strcmp (mono_method_get_name (m), "ProcessKeyDown") == 0)
-            keyDown = m;
-        else if (strcmp (mono_method_get_name (m), "ProcessKeyPress") == 0)
-            keyPress = m;
-    }
-
-    fldIsDirty = mono_class_get_field_from_name (klass, "IsDirty");
-    fldDirtyRect = mono_class_get_field_from_name (klass, "DirtyRect");
-    fldDirtyBmp = mono_class_get_field_from_name (klass, "dirtyBmp");
-
-    obj = mono_object_new (domain, klass);
-    //mono_runtime_object_init (obj);
-    MonoObject *exc = NULL;
-    mono_runtime_invoke (ctor, obj, NULL, &exc);
-    if (exc)
-        printException(exc);
-
-    main_loop();
-
-    retval = mono_environment_exitcode_get ();
-
-    mono_jit_cleanup (domain);
-
-    pthread_exit(retval);
-}
-
-void crow_init () {
-    if(pthread_create(&crowThread, NULL, crow_thread, NULL) == -1) {
-        perror("pthread_create");
-        exit (EXIT_FAILURE);
-    }
-
-    //return retval;
-}
-

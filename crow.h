@@ -42,7 +42,7 @@ typedef struct CrowEvent_t {
 }CrowEvent;
 
 
-CrowEvent* crow_create_evt(uint32_t eventType, uint32_t data0, uint32_t data1);
+CrowEvent* crow_evt_create(uint32_t eventType, uint32_t data0, uint32_t data1);
 void crow_evt_enqueue(CrowEvent *pEvt);
 CrowEvent* crow_evt_dequeue();
 bool crow_evt_pending ();
@@ -51,17 +51,13 @@ typedef struct Rectangle_t {
     int x,y,width,height;
 }Rectangle;
 
+volatile extern uint8_t* crowBuffer;
 volatile extern uint32_t dirtyOffset;
 volatile extern uint32_t dirtyLength;
-volatile extern uint8_t* crowBuffer;
-
-extern int MouseX;
-extern int MouseY;
-extern int Events;
 
 void crow_init();
-void crow_buffer_resize (uint32_t width, uint32_t height);
 void crow_load ();
+
 void crow_lock_update_mutex();
 void crow_release_update_mutex();
 
