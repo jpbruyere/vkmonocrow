@@ -19,13 +19,9 @@ static MonoMethod *loadiface = NULL, *resize = NULL, *update = NULL,
 
 
 static pthread_t crowThread;
-pthread_mutex_t crow_load_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t crow_update_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static uint8_t loadFlag = FALSE; //true when a file is triggered to be loaded
 static cairo_rectangle_int_t crowBuffBounds;
-static char* fileName = NULL;
-
 volatile uint8_t* crowBuffer = NULL;
 volatile uint32_t dirtyOffset = 0;
 volatile uint32_t dirtyLength = 0;
@@ -155,49 +151,44 @@ void _main_loop(){
             if (evt->eventType & CROW_MOUSE_EVT){
                 if (evt->eventType == CROW_MOUSE_MOVE){
                     void* args[2];
-                    args[0] = &evt->data0;
-                    args[1] = &evt->data1;
+                    args[0] = &evt->data0.int32;
+                    args[1] = &evt->data1.int32;
                     mono_runtime_invoke (mouseMove, objIface, args, &exception);
                 }else if (evt->eventType == CROW_MOUSE_DOWN){
                     void* args[1];
-                    args[0] = &evt->data0;
+                    args[0] = &evt->data0.int32;
                     mono_runtime_invoke (mouseDown, objIface, args, &exception);
                 }else if (evt->eventType == CROW_MOUSE_UP){
                     void* args[1];
-                    args[0] = &evt->data0;
+                    args[0] = &evt->data0.int32;
                     mono_runtime_invoke (mouseUp, objIface, args, &exception);
                 }
             }else if (evt->eventType & CROW_KEY_EVT){
                 void* args[1];
-                args[0] = &evt->data1;
+                args[0] = &evt->data1.int32;
                 //args[1] = &evt->data1;
                 if (evt->eventType == CROW_KEY_DOWN)
                     mono_runtime_invoke (keyDown, objIface, args, &exception);
                 else if (evt->eventType == CROW_KEY_UP)
                     mono_runtime_invoke (keyUp, objIface, args, &exception);
                 else if (evt->eventType == CROW_KEY_PRESS){
-                    args[0] = &evt->data0;
+                    args[0] = &evt->data0.int32;
                     mono_runtime_invoke (keyPress, objIface, args, &exception);
                 }
-            }else if (evt->eventType & CROW_RESIZE){
-                _crow_buffer_resize(evt->data0,evt->data1);
+            }else if (evt->eventType == CROW_RESIZE){
+                _crow_buffer_resize(evt->data0.int32,evt->data1.int32);
                 void* args[1];
                 args[0] = &crowBuffBounds;
                 mono_runtime_invoke (resize, objIface, args, &exception);
+            }else if (evt->eventType == CROW_LOAD){
+                MonoString *str = mono_string_new (domainCrow, evt->data0.str);
+                void* args[1];
+                args[0] = str;
+                crow_lock_update_mutex();
+                mono_runtime_invoke (loadiface, objIface, args, &exception);
+                crow_release_update_mutex();
             }
             free(evt);
-            if (exception)
-                _printException(exception);
-        }
-        if (loadFlag){
-            exception = NULL;
-            pthread_mutex_lock(&crow_load_mutex);
-            //MonoString *str = mono_string_new (domain, "/mnt/devel/gts/libvk/crow/Tests/Interfaces/GraphicObject/0.crow");
-            MonoString *str = mono_string_new (domainCrow, "/mnt/devel/gts/libvk/crow/Tests/Interfaces/Divers/0.crow");
-            //MonoString *str = mono_string_new (domain, "/mnt/devel/gts/libvk/crow/Tests/Interfaces/TemplatedControl/testSpinner.crow");
-            mono_runtime_invoke (loadiface, objIface, &str, &exception);
-            loadFlag = FALSE;
-            pthread_mutex_unlock(&crow_load_mutex);
             if (exception)
                 _printException(exception);
         }
@@ -272,12 +263,8 @@ void crow_init () {
         exit (EXIT_FAILURE);
     }
 }
-void crow_load () {
-    while(loadFlag)
-        continue;
-    pthread_mutex_lock(&crow_load_mutex);
-    loadFlag = TRUE;
-    pthread_mutex_unlock(&crow_load_mutex);
+void crow_load (const char* path) {
+    crow_evt_enqueue(crow_evt_create_pChar(CROW_LOAD,path,0));
 }
 
 void crow_lock_update_mutex(){
