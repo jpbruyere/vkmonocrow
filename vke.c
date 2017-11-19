@@ -1,184 +1,59 @@
-
-
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#include "utils.h"
 #include "vke.h"
 #include "compute.h"
-#include "vkeBuffer.h"
-
-#include "crow.h"
-
-typedef struct VkePBO_t {
-    VkImage image;
-    VkImageView view;
-    VkDeviceMemory mem;
-    uint8_t* map;
-}VkePBO;
+#include "vkhelpers.h"
+#include "vkcrow.h"
 
 
-static VkeBuffer crowBuff;
+bool vkeCheckPhyPropBlitSource (VkEngine *e) {
+    VkFormatProperties formatProps;
+    vkGetPhysicalDeviceFormatProperties(e->phy, e->renderer.format, &formatProps);
+    assert((formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT) && "Format cannot be used as transfer source");
+}
 
-void vkeFindPhy (VkEngine* e, VkPhysicalDeviceType phyType) {
-    uint32_t gpu_count = 0;
+void initPhySurface(VkEngine* e, VkFormat preferedFormat, VkPresentModeKHR presentMode){
+    VkRenderer* r = &e->renderer;
 
-    VK_CHECK_RESULT(vkEnumeratePhysicalDevices (e->inst, &gpu_count, NULL));
+    uint32_t count;
+    VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR (e->phy, r->surface, &count, NULL));
+    assert (count>0);
+    VkSurfaceFormatKHR formats[count];
+    VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR (e->phy, r->surface, &count, formats));
 
-    VkPhysicalDevice phys[gpu_count];
-
-    VK_CHECK_RESULT(vkEnumeratePhysicalDevices (e->inst, &gpu_count, &phys));
-
-    for (int i=0; i<gpu_count; i++){
-        VkPhysicalDeviceProperties phy;
-        vkGetPhysicalDeviceProperties (phys[i], &phy);
-        if (phy.deviceType & phyType){
-            printf ("GPU: %s  vulkan:%d.%d.%d driver:%d\n", phy.deviceName,
-                    phy.apiVersion>>22, phy.apiVersion>>12&2048, phy.apiVersion&8191,
-                    phy.driverVersion);
-            e->phy = phys[i];
-            vkGetPhysicalDeviceMemoryProperties(e->phy, &e->memory_properties);
-            vkGetPhysicalDeviceProperties(e->phy, &e->gpu_props);
-            return ;
+    for (int i=0; i<count; i++){
+        if (formats[i].format == preferedFormat) {
+            r->format = formats[i].format;
+            r->colorSpace = formats[i].colorSpace;
+            break;
         }
     }
-    fprintf (stderr, "No suitable GPU found\n");
-    exit (-1);
-}
+    assert (r->format != VK_FORMAT_UNDEFINED);
 
-VkFence vkeCreateFence (VkDevice dev) {
-    VkFence fence;
-    VkFenceCreateInfo fenceInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                                    .pNext = NULL,
-                                    .flags = 0 };
-    VK_CHECK_RESULT(vkCreateFence(dev, &fenceInfo, NULL, &fence));
-    return fence;
-}
-VkSemaphore vkeCreateSemaphore (VkDevice dev) {
-    VkSemaphore semaphore;
-    VkSemaphoreCreateInfo info = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-                                                           .pNext = NULL,
-                                                           .flags = 0};
-    VK_CHECK_RESULT(vkCreateSemaphore(dev, &info, NULL, &semaphore));
-    return semaphore;
-}
-VkCommandPool vkeCreateCmdPool (VkEngine* e, uint32_t qFamIndex){
-    VkCommandPool cmdPool;
-    VkCommandPoolCreateInfo cmd_pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-                                              .pNext = NULL,
-                                              .queueFamilyIndex = qFamIndex,
-                                              .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT };
-    assert (vkCreateCommandPool(e->dev, &cmd_pool_info, NULL, &cmdPool) == VK_SUCCESS);
-    return cmdPool;
-}
-VkCommandBuffer vkeCreateCmdBuff (VkEngine* e, VkCommandPool cmdPool, uint32_t buffCount){
-    VkCommandBuffer cmdBuff;
-    VkCommandBufferAllocateInfo cmd = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-                                        .pNext = NULL,
-                                        .commandPool = cmdPool,
-                                        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                        .commandBufferCount = buffCount };
-    assert (vkAllocateCommandBuffers (e->dev, &cmd, &cmdBuff) == VK_SUCCESS);
-    return cmdBuff;
-}
-
-void vkeBeginCmd(VkCommandBuffer cmdBuff) {
-    VkCommandBufferBeginInfo cmd_buf_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                                              .pNext = NULL,
-                                              .flags = 0,
-                                              .pInheritanceInfo = NULL };
-
-    VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuff, &cmd_buf_info));
-}
-void vkeSubmitCmd(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence){
-    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                                 .commandBufferCount = 1,
-                                 .pCommandBuffers = pCmdBuff};
-    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, fence));
-}
-void vkeSubmitDrawCmd(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore* pWaitSemaphore, VkSemaphore* pSignalSemaphore){
-    VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                                 .commandBufferCount = 1,
-                                 .signalSemaphoreCount = 1,
-                                 .pSignalSemaphores = pSignalSemaphore,
-                                 .waitSemaphoreCount = 1,
-                                 .pWaitSemaphores = pWaitSemaphore,
-                                 .pWaitDstStageMask = &dstStageMask,
-                                 .pCommandBuffers = pCmdBuff};
-    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, NULL));
-}
-
-void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout old_image_layout,
-                      VkImageLayout new_image_layout, VkPipelineStageFlags src_stages, VkPipelineStageFlags dest_stages) {
-    VkImageMemoryBarrier image_memory_barrier = { .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                                  .oldLayout = old_image_layout,
-                                                  .newLayout = new_image_layout,
-                                                  .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                                  .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                                  .image = image,
-                                                  .subresourceRange = {aspectMask,0,1,0,1}};
-
-    switch (old_image_layout) {
-        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-            image_memory_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    VK_CHECK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(e->phy, r->surface, &count, NULL));
+    assert (count>0);
+    VkPresentModeKHR presentModes[count];
+    VK_CHECK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(e->phy, r->surface, &count, presentModes));
+    r->presentMode = -1;
+    for (int i=0; i<count; i++){
+        if (presentModes[i] == presentMode) {
+            r->presentMode = presentModes[i];
             break;
-
-        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-            image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_PREINITIALIZED:
-            image_memory_barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-            break;
-
-        default:
-            break;
+        }
     }
-
-    switch (new_image_layout) {
-        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            break;
-
-        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-            image_memory_barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-            break;
-
-        default:
-            break;
-    }
-
-    vkCmdPipelineBarrier(cmdBuff, src_stages, dest_stages, 0, 0, NULL, 0, NULL, 1, &image_memory_barrier);
+    assert (r->presentMode >= 0);
 }
 
-void vkeDestroyImage(VkEngine* e, VkeImage* img) {
-    vkDestroyImage(e->dev, img->image, NULL);
-    vkFreeMemory(e->dev, img->mem, NULL);
-}
-
-void createSwapChain (VkEngine* e, VkFormat preferedFormat){
+void createSwapChain (VkEngine* e){
     // Ensure all operations on the device have been finished before destroying resources
     vkDeviceWaitIdle(e->dev);
     VkRenderer* r = &e->renderer;
 
-    VkSwapchainKHR oldSwapchain = r->swapChain;
-
     VkSurfaceCapabilitiesKHR surfCapabilities;
     VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(e->phy, r->surface, &surfCapabilities));
     assert (surfCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+
 
     // width and height are either both 0xFFFFFFFF, or both not 0xFFFFFFFF.
     if (surfCapabilities.currentExtent.width == 0xFFFFFFFF) {
@@ -199,41 +74,19 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
         r->height= surfCapabilities.currentExtent.height;
     }
 
-    uint32_t formatCount;
-    VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR (e->phy, r->surface, &formatCount, NULL));
-    assert (formatCount>0);
-    VkSurfaceFormatKHR formats[formatCount];
-    VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR (e->phy, r->surface, &formatCount, formats));
-
-    int formatIdx = -1;
-    for (int i=0; i<formatCount; i++){
-        if (formats[i].format == preferedFormat) {
-            formatIdx=i;
-            break;
-        }
-    }
-    assert (formatIdx>=0);
-
-    r->format = preferedFormat;
-
-    uint32_t presentModeCount;
-    VK_CHECK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(e->phy, r->surface, &presentModeCount, NULL));
-    assert (presentModeCount>0);
-    VkPresentModeKHR presentModes[presentModeCount];
-    VK_CHECK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(e->phy, r->surface, &presentModeCount, presentModes));
-
+    VkSwapchainKHR oldSwapchain = r->swapChain;
     VkSwapchainCreateInfoKHR createInfo = { .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
                                             .surface = r->surface,
                                             .minImageCount = surfCapabilities.minImageCount,
-                                            .imageFormat = formats[formatIdx].format,
-                                            .imageColorSpace = formats[formatIdx].colorSpace,
+                                            .imageFormat = r->format,
+                                            .imageColorSpace = r->colorSpace,
                                             .imageExtent = {r->width,r->height},
                                             .imageArrayLayers = 1,
                                             .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                             .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
                                             .preTransform = surfCapabilities.currentTransform,
                                             .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-                                            .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+                                            .presentMode = r->presentMode,
                                             .clipped = VK_TRUE,
                                             .oldSwapchain = oldSwapchain};
 
@@ -250,8 +103,6 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
         free(r->ScBuffers);
         free(r->cmdBuffs);
     }
-
-
 
     VK_CHECK_RESULT(vkGetSwapchainImagesKHR(e->dev, r->swapChain, &r->imgCount, NULL));
     assert (r->imgCount>0);
@@ -273,10 +124,9 @@ void createSwapChain (VkEngine* e, VkFormat preferedFormat){
         assert (vkCreateImageView(e->dev, &createInfo, NULL, &sc_buffer.view) == VK_SUCCESS);
         sc_buffer.image = images[i];
         r->ScBuffers [i] = sc_buffer;
-        r->cmdBuffs [i] = vkeCreateCmdBuff(e, e->renderer.cmdPool, 1);
+        r->cmdBuffs [i] = vkh_cmd_buff_create(e->dev, e->renderer.cmdPool, 1);
     }
     r->currentScBufferIndex = 0;
-    vkDeviceWaitIdle(e->dev);
 }
 
 void EngineInit (VkEngine* e) {
@@ -291,8 +141,8 @@ void EngineInit (VkEngine* e) {
     e->infos.pEngineName = APP_SHORT_NAME;
     e->infos.engineVersion = 1;
     e->infos.apiVersion = VK_API_VERSION_1_0;
-    e->renderer.width = 600;
-    e->renderer.height = 480;
+    e->renderer.width = 1024;
+    e->renderer.height = 800;
 
     const uint32_t enabledLayersCount = 1;
     const char* enabledLayers[] = {"VK_LAYER_LUNARG_core_validation"};
@@ -308,7 +158,10 @@ void EngineInit (VkEngine* e) {
 
     VK_CHECK_RESULT(vkCreateInstance (&inst_info, NULL, &e->inst));
 
-    vkeFindPhy (e, VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+    e->phy = vkh_find_phy (e->inst, VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+
+    vkGetPhysicalDeviceMemoryProperties(e->phy, &e->memory_properties);
+    vkGetPhysicalDeviceProperties(e->phy, &e->gpu_props);
 
     uint32_t queue_family_count = 0;
     int cQueue = -1, gQueue = -1, tQueue = -1;
@@ -413,16 +266,20 @@ void EngineInit (VkEngine* e) {
     vkGetDeviceQueue(e->dev, cQueue, 0, &e->computer.queue);
     vkGetDeviceQueue(e->dev, tQueue, 0, &e->loader.queue);
 
-    e->renderer.cmdPool = vkeCreateCmdPool (e, gQueue);
-    e->computer.cmdPool = vkeCreateCmdPool (e, cQueue);
-    e->loader.cmdPool = vkeCreateCmdPool (e, tQueue);
+    e->renderer.cmdPool = vkh_cmd_pool_create (e->dev, gQueue, 0);
+    e->computer.cmdPool = vkh_cmd_pool_create (e->dev, cQueue, 0);
+    e->loader.cmdPool = vkh_cmd_pool_create (e->dev, tQueue, 0);
 
-    r->semaPresentEnd = vkeCreateSemaphore(e->dev);
-    r->semaDrawEnd = vkeCreateSemaphore(e->dev);
+    r->semaPresentEnd = vkh_semaphore_create(e->dev);
+    r->semaDrawEnd = vkh_semaphore_create(e->dev);
+
+    initPhySurface(e,VK_FORMAT_B8G8R8A8_UNORM,VK_PRESENT_MODE_FIFO_KHR);
+
+    createSwapChain(e);
 }
 void EngineTerminate (VkEngine* e) {
     vkDeviceWaitIdle(e->dev);
-    destroyCrowStaggingBuf(&crowBuff);
+    vkcrow_terminate();
     VkRenderer* r = &e->renderer;
 
     vkDestroySemaphore(e->dev, r->semaDrawEnd, NULL);
@@ -451,11 +308,9 @@ void EngineTerminate (VkEngine* e) {
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     if (action == GLFW_PRESS){
-        //printf("scancode: %d",key);
-        //fflush(stdout);
-        crow_evt_enqueue(crow_evt_create_int32(CROW_KEY_DOWN,key,scancode));
+        vkcrow_key_up(scancode);
     }else if (action == GLFW_RELEASE)
-        crow_evt_enqueue(crow_evt_create_int32(CROW_KEY_UP,key,scancode));
+        vkcrow_key_up(scancode);
 
     if (action != GLFW_PRESS)
         return;
@@ -464,84 +319,38 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(window, GLFW_TRUE);
         break;
     case GLFW_KEY_F3 :
-        crow_load("ifaces/0.crow");
+        vkcrow_load("ifaces/0.crow");
         break;
     case GLFW_KEY_F4 :
-        crow_load("ifaces/1.crow");
+        vkcrow_load("ifaces/1.crow");
         break;
     case GLFW_KEY_F5 :
-        crow_load("ifaces/2.crow");
+        vkcrow_load("ifaces/2.crow");
         break;
     }
 }
 
 static void char_callback (GLFWwindow* window, uint32_t c){
-    crow_evt_enqueue(crow_evt_create_int32(CROW_KEY_PRESS,c,0));
+    vkcrow_key_press(c);
 }
 
 static void mouse_move_callback(GLFWwindow* window, double x, double y){
-    crow_evt_enqueue(crow_evt_create_int32(CROW_MOUSE_MOVE,(int)x,(int)y));
+    vkcrow_mouse_move((int)x,(int)y);
 }
 static void mouse_button_callback(GLFWwindow* window, int but, int state, int modif){
     if (state == GLFW_PRESS)
-        crow_evt_enqueue(crow_evt_create_int32(CROW_MOUSE_DOWN,but,0));
+        vkcrow_mouse_down(but);
     else
-        crow_evt_enqueue(crow_evt_create_int32(CROW_MOUSE_UP,but,0));
+        vkcrow_mouse_up(but);
 }
-static void win_resize_callback(GLFWwindow* window, int width, int height){
 
-}
 
 void buildCommandBuffers(VkRenderer* r){
     for (int i=0;i<r->imgCount;i++) {
-        VkImage bltDstImage = r->ScBuffers[i].image;
-
-        VkCommandBufferBeginInfo cmd_buf_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                                                  .pNext = NULL,
-                                                  .flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
-                                                  .pInheritanceInfo = NULL };
-        VK_CHECK_RESULT(vkBeginCommandBuffer(r->cmdBuffs[i], &cmd_buf_info));
-
-        //vkeBeginCmd (r->cmdBuffs[i]);
-        set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-
-        VkBufferImageCopy bufferCopyRegion = { .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-                                               .imageExtent = {r->width,r->height,1}};
-
-        vkCmdCopyBufferToImage(r->cmdBuffs[i], crowBuff.buffer, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
-
-        set_image_layout(r->cmdBuffs[i], bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-
-        VK_CHECK_RESULT(vkEndCommandBuffer(r->cmdBuffs[i]));
+        vkcrow_cmd_copy_create(r->cmdBuffs[i],r->ScBuffers[i].image,r->width,r->height);
     }
 }
 
-VkeBuffer createCrowStaggingBuff (VkEngine* e){
-    VkeBuffer buff = vke_buffer_create(e->dev, &e->memory_properties, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, e->renderer.width * e->renderer.height * 4);
-    VK_CHECK_RESULT(vke_buffer_map(&buff));
-    return buff;
-}
-void destroyCrowStaggingBuf(VkeBuffer* buff){
-    vke_buffer_unmap(buff);
-    vke_buffer_destroy(buff);
-}
-
-
-void checkCrow (){
-    crow_lock_update_mutex();
-    if (dirtyLength>0){
-        if (dirtyLength+dirtyOffset>crowBuff.size)
-            dirtyLength = crowBuff.size - dirtyOffset;
-        memcpy(crowBuff.mapped + dirtyOffset, crowBuffer + dirtyOffset, dirtyLength);
-        dirtyLength = dirtyOffset = 0;
-    }
-    crow_release_update_mutex();
-}
 
 void draw(VkEngine* e) {
     VkRenderer* r = &e->renderer;
@@ -549,29 +358,25 @@ void draw(VkEngine* e) {
     VkResult err = vkAcquireNextImageKHR(e->dev, r->swapChain, UINT64_MAX, r->semaPresentEnd, VK_NULL_HANDLE,
                                 &r->currentScBufferIndex);
     if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)){
-        createSwapChain(e, VK_FORMAT_B8G8R8A8_UNORM);
-        crow_evt_enqueue(crow_evt_create_int32(CROW_RESIZE,e->renderer.width,e->renderer.height));
-        destroyCrowStaggingBuf(&crowBuff);
-        crowBuff = createCrowStaggingBuff(e);
+        createSwapChain(e);
+        vkcrow_resize(e->dev,e->memory_properties,e->renderer.width,e->renderer.height);
         buildCommandBuffers(r);
-        return;
+    }else{
+        VK_CHECK_RESULT(err);
+        vkcrow_cmd_copy_submit (r->presentQueue, &r->cmdBuffs[r->currentScBufferIndex], &r->semaPresentEnd, &r->semaDrawEnd);
+
+        /* Now present the image in the window */
+        VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                                     .swapchainCount = 1,
+                                     .pSwapchains = &r->swapChain,
+                                     .waitSemaphoreCount = 1,
+                                     .pWaitSemaphores = &r->semaDrawEnd,
+                                     .pImageIndices = &r->currentScBufferIndex };
+
+        /* Make sure command buffer is finished before presenting */
+        VK_CHECK_RESULT(vkQueuePresentKHR(r->presentQueue, &present));
     }
-
-    checkCrow();
-
-    VK_CHECK_RESULT(err);
-    vkeSubmitDrawCmd (r->presentQueue, &r->cmdBuffs[r->currentScBufferIndex], &r->semaPresentEnd, &r->semaDrawEnd);
-
-    /* Now present the image in the window */
-    VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-                                 .swapchainCount = 1,
-                                 .pSwapchains = &r->swapChain,
-                                 .waitSemaphoreCount = 1,
-                                 .pWaitSemaphores = &r->semaDrawEnd,
-                                 .pImageIndices = &r->currentScBufferIndex };
-
-    /* Make sure command buffer is finished before presenting */
-    VK_CHECK_RESULT(vkQueuePresentKHR(r->presentQueue, &present));
+    vkcrow_buffer_update();
 }
 
 int main(int argc, char *argv[]) {
@@ -581,14 +386,10 @@ int main(int argc, char *argv[]) {
 
     EngineInit(&e);
 
-    createSwapChain(&e, VK_FORMAT_B8G8R8A8_UNORM);
-
-    crow_init();
+    vkcrow_start();
 
     vkeCheckPhyPropBlitSource (&e);
 
-    crowBuff = createCrowStaggingBuff(&e);
-    buildCommandBuffers(&e.renderer);
 
     glfwSetKeyCallback(e.renderer.window, key_callback);
     glfwSetCharCallback(e.renderer.window, char_callback);
@@ -596,9 +397,9 @@ int main(int argc, char *argv[]) {
     glfwSetMouseButtonCallback(e.renderer.window, mouse_button_callback);
     //glfwSetWindowSizeCallback(e.renderer.window, win_resize_callback);
 
-    crow_evt_enqueue(crow_evt_create_int32(CROW_RESIZE,e.renderer.width,e.renderer.height));
-
-    crow_load("/mnt/devel/gts/libvk/crow/Tests/Interfaces/Divers/0.crow");
+    vkcrow_resize(e.dev,e.memory_properties,e.renderer.width,e.renderer.height);
+    buildCommandBuffers(&e.renderer);
+    vkcrow_load("/mnt/devel/gts/libvk/crow/Tests/Interfaces/Divers/0.crow");
 
     while (!glfwWindowShouldClose(e.renderer.window)) {
         glfwPollEvents();
@@ -608,11 +409,4 @@ int main(int argc, char *argv[]) {
     EngineTerminate (&e);
 
     return 0;
-}
-
-//HELPERS
-bool vkeCheckPhyPropBlitSource (VkEngine *e) {
-    VkFormatProperties formatProps;
-    vkGetPhysicalDeviceFormatProperties(e->phy, e->renderer.format, &formatProps);
-    assert((formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT) && "Format cannot be used as transfer source");
 }

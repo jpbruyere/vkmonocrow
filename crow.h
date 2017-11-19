@@ -32,7 +32,6 @@ volatile extern uint32_t dirtyOffset;
 volatile extern uint32_t dirtyLength;
 
 void crow_init();
-void crow_load (const char *path);
 
 void crow_lock_update_mutex();
 void crow_release_update_mutex();

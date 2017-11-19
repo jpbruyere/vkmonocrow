@@ -5,7 +5,7 @@
 #include <math.h>
 
 #include "compute.h"
-#include "utils.h"
+#include "vkhelpers.h"
 
 void createBuffer(VkEngine* e, VkComputePipeline* cp) {
     // Create an image, map it, and write some values to the image
@@ -26,21 +26,21 @@ void createBuffer(VkEngine* e, VkComputePipeline* cp) {
     vkGetImageMemoryRequirements(e->dev, cp->outImg, &memReq);
     VkMemoryAllocateInfo memAllocInfo = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                                           .allocationSize = memReq.size };
-    assert(memory_type_from_properties(e, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    assert(memory_type_from_properties(e->memory_properties, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                             &memAllocInfo.memoryTypeIndex));
     VK_CHECK_RESULT(vkAllocateMemory(e->dev, &memAllocInfo, NULL, &cp->bufferMemory));
     VK_CHECK_RESULT(vkBindImageMemory(e->dev, cp->outImg, cp->bufferMemory, 0));
 
-    VkCommandBuffer cmdBuff = vkeCreateCmdBuff(e, e->computer.cmdPool, 1);
-    vkeBeginCmd (cmdBuff);
+    VkCommandBuffer cmdBuff = vkh_cmd_buff_create(e->dev, e->computer.cmdPool, 1);
+    vkh_cmd_begin(cmdBuff,0);
     // Intend to blit from this image, set the layout accordingly
     set_image_layout(cmdBuff, cp->outImg, VK_IMAGE_ASPECT_COLOR_BIT,
                      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
                      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuff));
 
-    VkFence cmdFence = vkeCreateFence(e->dev);
-    vkeSubmitCmd (e->computer.queue, &cmdBuff, cmdFence);
+    VkFence cmdFence = vkh_fence_create(e->dev);
+    vkh_cmd_submit (e->computer.queue, &cmdBuff, cmdFence);
     vkWaitForFences(e->dev, 1, &cmdFence, VK_TRUE, FENCE_TIMEOUT);
 
     vkFreeCommandBuffers (e->dev, e->computer.cmdPool, 1, &cmdBuff);
@@ -137,7 +137,7 @@ void createComputePipeline(VkEngine* e, VkComputePipeline* cp) {
 }
 
 void createCommandBuffer(VkEngine* e, VkComputePipeline* cp) {
-    cp->commandBuffer = vkeCreateCmdBuff(e,e->computer.cmdPool,1);
+    cp->commandBuffer = vkh_cmd_buff_create(e->dev, e->computer.cmdPool,1);
 
     VkCommandBufferBeginInfo beginInfo = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                                            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
@@ -159,7 +159,7 @@ void runCommandBuffer(VkEngine* e, VkComputePipeline* cp) {
     VkSubmitInfo submitInfo = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                                 .commandBufferCount = 1,
                                 .pCommandBuffers = &cp->commandBuffer};
-    VkFence fence = vkeCreateFence(e->dev);
+    VkFence fence = vkh_fence_create(e->dev);
     VK_CHECK_RESULT(vkQueueSubmit(e->computer.queue, 1, &submitInfo, fence));
     VK_CHECK_RESULT(vkWaitForFences(e->dev, 1, &fence, VK_TRUE, 100000000000));
     vkDestroyFence(e->dev, fence, NULL);

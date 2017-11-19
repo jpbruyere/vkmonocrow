@@ -165,7 +165,7 @@ void _main_loop(){
                 }
             }else if (evt->eventType & CROW_KEY_EVT){
                 void* args[1];
-                args[0] = &evt->data1.int32;
+                args[0] = &evt->data0.int32;
                 //args[1] = &evt->data1;
                 if (evt->eventType == CROW_KEY_DOWN)
                     mono_runtime_invoke (keyDown, objIface, args, &exception);
@@ -262,9 +262,6 @@ void crow_init () {
         perror("pthread_create");
         exit (EXIT_FAILURE);
     }
-}
-void crow_load (const char* path) {
-    crow_evt_enqueue(crow_evt_create_pChar(CROW_LOAD,path,0));
 }
 
 void crow_lock_update_mutex(){

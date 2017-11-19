@@ -9,7 +9,7 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-#define APP_SHORT_NAME "vulkansamples_instance"
+#define APP_SHORT_NAME "vkcrow_test"
 /* Number of samples needs to be the same at image creation,      */
 /* renderpass creation and pipeline creation.                     */
 #define NUM_SAMPLES VK_SAMPLE_COUNT_1_BIT
@@ -19,12 +19,6 @@ typedef struct ImageBuffer_t {
     VkImage image;
     VkImageView view;
 }ImageBuffer;
-
-typedef struct VkeImage_t {
-    VkImage image;
-    VkImageView view;
-    VkDeviceMemory mem;
-}VkeImage;
 
 typedef struct VkRenderer_t {
     VkQueue presentQueue;
@@ -37,6 +31,8 @@ typedef struct VkRenderer_t {
     VkSemaphore semaDrawEnd;
 
     VkFormat format;
+    VkColorSpaceKHR colorSpace;
+    VkPresentModeKHR presentMode;
     uint32_t width;
     uint32_t height;
 
@@ -95,13 +91,4 @@ typedef struct VkComputePipeline_t {
 void dumpLayerExts ();
 uint32_t* readFile(uint32_t* length, const char* filename);
 char *read_spv(const char *filename, size_t *psize);
-
-void vkeFindPhy (VkEngine* e, VkPhysicalDeviceType phyType);
-
-VkFence vkeCreateFence (VkDevice dev);
-VkSemaphore vkeCreateSemaphore (VkDevice dev);
-VkCommandBuffer vkeCreateCmdBuff (VkEngine* e, VkCommandPool cmdPool, uint32_t buffCount);
-
-bool vkeCheckPhyPropBlitSource (VkEngine *e);
-
 #endif
