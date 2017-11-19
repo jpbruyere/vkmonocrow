@@ -22,7 +22,7 @@ static pthread_t crowThread;
 pthread_mutex_t crow_update_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static cairo_rectangle_int_t crowBuffBounds;
-volatile uint8_t* crowBuffer = NULL;
+volatile uint8_t* crowBmp = NULL;
 volatile uint32_t dirtyOffset = 0;
 volatile uint32_t dirtyLength = 0;
 
@@ -71,10 +71,10 @@ void _crow_buffer_resize (uint32_t width, uint32_t height){
     crow_lock_update_mutex();
     crowBuffBounds.width = width;
     crowBuffBounds.height = height;
-    if(crowBuffer)
-        free(crowBuffer);
+    if(crowBmp)
+        free(crowBmp);
     size_t buffSize = (size_t)(crowBuffBounds.width*crowBuffBounds.height*4);
-    crowBuffer = (uint8_t*)malloc(buffSize);
+    crowBmp = (uint8_t*)malloc(buffSize);
     /*printf("resize: (%d,%d), bmpPtr:%lu, length=%lu\n",width,height,
            dirtyBmp, dirtyBmpSize);
     fflush(stdout);*/
@@ -134,7 +134,7 @@ void _crow_mono_update (cairo_region_t* reg, MonoArray* bmp){
            crowBuffer, ptrBmp);
     fflush(stdout);*/
 
-    memcpy(crowBuffer + dirtyOffset, ptrBmp + dirtyOffset, dirtyLength);
+    memcpy(crowBmp + dirtyOffset, ptrBmp + dirtyOffset, dirtyLength);
 
     crow_release_update_mutex();
 }
@@ -197,7 +197,7 @@ void _main_loop(){
         double elapsed = (frame.tv_sec - lastFrame.tv_sec) * 1000.0;      // sec to ms
         elapsed += (frame.tv_usec - lastFrame.tv_usec) / 1000.0;
 
-        if (elapsed > 10.0){
+        if (elapsed > 3.0){
             lastFrame = frame;
 
             struct timeval t1, t2;

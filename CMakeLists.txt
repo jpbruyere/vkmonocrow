@@ -1,4 +1,4 @@
-PROJECT(libvk)
+PROJECT(vkcrow)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
 
@@ -13,48 +13,6 @@ INCLUDE(FindPkgConfig)
 
 PKG_CHECK_MODULES(CAIRO REQUIRED cairo)
 PKG_CHECK_MODULES(MONO2 REQUIRED mono-2)
-
-# Find glslc shader compiler.
-# On Android, the NDK includes the binary, so no external dependency.
-if(ANDROID)
-	file(GLOB glslc-folders ${ANDROID_NDK}/shader-tools/*)
-else()
-	file(GLOB glslc-folders ${VULKAN_SDK}/bin)
-endif()
-FIND_PROGRAM(GLSLC glslc HINTS ${glslc-folders})
-
-SET(SHADER_DIR "shaders")
-SET(SHADER_FILES ${SHADER_DIR}/*.frag ${SHADER_DIR}/*.vert ${SHADER_DIR}/*.geom  ${SHADER_DIR}/*.comp)
-FILE(GLOB_RECURSE SHADERS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${SHADER_FILES})
-FOREACH(SHADER ${SHADERS})
-	SET(shader-input ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER})
-	SET(shader-output ${CMAKE_CURRENT_BINARY_DIR}/${SHADER}.spv)
-	ADD_CUSTOM_COMMAND (
-	OUTPUT ${shader-output}
-	  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/${SHADER_DIR}"
-	  COMMAND ${GLSLC} ${shader-input} -o ${shader-output}
-	  COMMENT "Compiling ${shader-input}"
-	  DEPENDS ${SHADER}
-	  VERBATIM
-	)
-	SET(SHADER_OUTPUTS ${SHADER_OUTPUTS} ${shader-output})
-ENDFOREACH()
-ADD_CUSTOM_TARGET(CompileShaders ALL DEPENDS ${SHADER_OUTPUTS})
-
-FILE(GLOB_RECURSE DATAS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "styles/*.style" "ifaces/*.*" "templates/*.*")
-FOREACH(DATA_FILE ${DATAS})
-	GET_FILENAME_COMPONENT(copy-dest-dir ${CMAKE_CURRENT_BINARY_DIR}/${DATA_FILE} DIRECTORY)
-	SET(copy-output ${CMAKE_CURRENT_BINARY_DIR}/${DATA_FILE})
-	ADD_CUSTOM_COMMAND(
-		OUTPUT  ${copy-output}
-	   COMMAND ${CMAKE_COMMAND} -E make_directory ${copy-dest-dir}
-	   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/${DATA_FILE}" "${copy-output}"
-	   COMMENT "Copying ${DATA_FILE} to ${copy-output}"
-	   DEPENDS ${DATA_FILE}
-	   VERBATIM
-	)
-ENDFOREACH()
-ADD_CUSTOM_TARGET(DataCopy ALL DEPENDS ${DATAS})
 
 IF(CMAKE_BUILD_TYPE MATCHES "Debug")
 	SET(CROWDLL_DIR "crow/build/Debug")
@@ -85,9 +43,9 @@ LINK_DIRECTORIES(
 	${CAIRO_LIBRARY_DIRS}
 )
 
-FILE(GLOB SOURCES *.c)
+FILE(GLOB SOURCES src/*.c)
 
-ADD_EXECUTABLE(${PROJECT_NAME} ${SOURCES} ${SHADERS} ${DATAS})
+ADD_LIBRARY(${PROJECT_NAME} SHARED ${SOURCES})
 
 TARGET_LINK_LIBRARIES(${PROJECT_NAME}
 	${Vulkan_LIBRARY}

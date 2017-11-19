@@ -37,19 +37,21 @@ void vkcrow_cmd_copy_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphor
     VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, NULL));
 }
 void vkcrow_resize(VkDevice dev, VkPhysicalDeviceMemoryProperties mem_properties, uint32_t width, uint32_t height){
+    crow_lock_update_mutex();
     crow_evt_enqueue(crow_evt_create_int32(CROW_RESIZE,width,height));
     vkcrow_terminate();
     crowBuff = NULL;
     crowBuff = vke_buffer_create(dev, mem_properties, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, width * height * 4);
     VK_CHECK_RESULT(vke_buffer_map(crowBuff));
+    crow_release_update_mutex();
 }
 void vkcrow_buffer_update (){
     crow_lock_update_mutex();
     if (dirtyLength>0){
         if (dirtyLength+dirtyOffset>crowBuff->size)
             dirtyLength = crowBuff->size - dirtyOffset;
-        memcpy(crowBuff->mapped + dirtyOffset, crowBuffer + dirtyOffset, dirtyLength);
+        memcpy(crowBuff->mapped + dirtyOffset, crowBmp + dirtyOffset, dirtyLength);
         dirtyLength = dirtyOffset = 0;
     }
     crow_release_update_mutex();

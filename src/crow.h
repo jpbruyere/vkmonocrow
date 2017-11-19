@@ -24,10 +24,10 @@
 #endif
 
 typedef struct Rectangle_t {
-    int x,y,width,height;
+	int x,y,width,height;
 }Rectangle;
 
-volatile extern uint8_t* crowBuffer;
+volatile extern uint8_t* crowBmp;
 volatile extern uint32_t dirtyOffset;
 volatile extern uint32_t dirtyLength;
 
