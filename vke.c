@@ -20,9 +20,6 @@ typedef struct VkePBO_t {
 
 static VkeBuffer crowBuff;
 
-
-
-
 void vkeFindPhy (VkEngine* e, VkPhysicalDeviceType phyType) {
     uint32_t gpu_count = 0;
 
@@ -165,64 +162,6 @@ void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags
     }
 
     vkCmdPipelineBarrier(cmdBuff, src_stages, dest_stages, 0, 0, NULL, 0, NULL, 1, &image_memory_barrier);
-}
-VkeImage loadImg(VkEngine* e){
-    VkeImage vi = {};
-    // Create an image, map it, and write some values to the image
-    VkImageCreateInfo image_info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-                                     .imageType = VK_IMAGE_TYPE_2D,
-                                     .tiling = VK_IMAGE_TILING_LINEAR,
-                                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                     .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                     .format = e->renderer.format,
-                                     .extent = {e->renderer.width,e->renderer.height,1},
-                                     .mipLevels = 1,
-                                     .arrayLayers = 1,
-                                     .samples = NUM_SAMPLES };
-
-    VK_CHECK_RESULT(vkCreateImage(e->dev, &image_info, NULL, &vi.image));
-
-    VkMemoryRequirements memReq;
-    vkGetImageMemoryRequirements(e->dev, vi.image, &memReq);
-    VkMemoryAllocateInfo memAllocInfo = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                                          .allocationSize = memReq.size };
-    assert(memory_type_from_properties(&e->memory_properties, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                            &memAllocInfo.memoryTypeIndex));
-    VK_CHECK_RESULT(vkAllocateMemory(e->dev, &memAllocInfo, NULL, &vi.mem));
-    VK_CHECK_RESULT(vkBindImageMemory(e->dev, vi.image, vi.mem, 0));
-
-    unsigned char *pImgMem;
-    VK_CHECK_RESULT(vkMapMemory(e->dev, vi.mem, 0, memReq.size, 0, (void **)&pImgMem));
-    // Checkerboard of 8x8 pixel squares
-    for (int row = 0; row < e->renderer.height; row++) {
-        for (int col = 0; col < e->renderer.width; col++) {
-            unsigned char rgb = (((row & 0x8) == 0) ^ ((col & 0x8) == 0)) * 255;
-            pImgMem[0] = rgb;
-            pImgMem[1] = rgb;
-            pImgMem[2] = rgb;
-            pImgMem[3] = 255;
-            pImgMem += 4;
-        }
-    }
-    vkUnmapMemory(e->dev, vi.mem);
-
-    VkCommandBuffer cmdBuff = vkeCreateCmdBuff(e, e->loader.cmdPool, 1);
-
-    vkeBeginCmd (cmdBuff);
-    // Intend to blit from this image, set the layout accordingly
-    set_image_layout(cmdBuff, vi.image, VK_IMAGE_ASPECT_COLOR_BIT,
-                     VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                     VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuff));
-
-    VkFence cmdFence = vkeCreateFence(e->dev);
-    vkeSubmitCmd (e->loader.queue, &cmdBuff, cmdFence);
-    vkWaitForFences(e->dev, 1, &cmdFence, VK_TRUE, FENCE_TIMEOUT);
-
-    vkFreeCommandBuffers (e->dev, e->loader.cmdPool, 1, &cmdBuff);
-    vkDestroyFence(e->dev, cmdFence, NULL);
-
-    return vi;
 }
 
 void vkeDestroyImage(VkEngine* e, VkeImage* img) {
@@ -525,13 +464,13 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(window, GLFW_TRUE);
         break;
     case GLFW_KEY_F3 :
-        crow_load("/mnt/devel/gts/libvk/crow/Tests/Interfaces/Divers/0.crow");
+        crow_load("ifaces/0.crow");
         break;
     case GLFW_KEY_F4 :
-        crow_load("/mnt/devel/gts/libvk/crow/Tests/Interfaces/Divers/1.crow");
+        crow_load("ifaces/1.crow");
         break;
     case GLFW_KEY_F5 :
-        crow_load("/mnt/devel/gts/libvk/crow/Tests/Interfaces/Divers/2.crow");
+        crow_load("ifaces/2.crow");
         break;
     }
 }
@@ -615,7 +554,6 @@ void draw(VkEngine* e) {
         destroyCrowStaggingBuf(&crowBuff);
         crowBuff = createCrowStaggingBuff(e);
         buildCommandBuffers(r);
-        vkDeviceWaitIdle(e->dev);
         return;
     }
 

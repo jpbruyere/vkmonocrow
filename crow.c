@@ -197,7 +197,7 @@ void _main_loop(){
         double elapsed = (frame.tv_sec - lastFrame.tv_sec) * 1000.0;      // sec to ms
         elapsed += (frame.tv_usec - lastFrame.tv_usec) / 1000.0;
 
-        if (elapsed > 5.0){
+        if (elapsed > 10.0){
             lastFrame = frame;
 
             struct timeval t1, t2;
