@@ -124,7 +124,7 @@ void createSwapChain (VkEngine* e){
         assert (vkCreateImageView(e->dev, &createInfo, NULL, &sc_buffer.view) == VK_SUCCESS);
         sc_buffer.image = images[i];
         r->ScBuffers [i] = sc_buffer;
-        r->cmdBuffs [i] = vkh_cmd_buff_create(e->dev, e->renderer.cmdPool, 1);
+        r->cmdBuffs [i] = vkh_cmd_buff_create(e->dev, e->renderer.cmdPool);
     }
     r->currentScBufferIndex = 0;
 }

@@ -21,6 +21,7 @@ typedef struct ImageBuffer_t {
 }ImageBuffer;
 
 typedef struct VkRenderer_t {
+    VkDevice dev;
     VkQueue presentQueue;
     VkCommandPool cmdPool;
 
@@ -39,9 +40,12 @@ typedef struct VkRenderer_t {
     uint32_t imgCount;
     uint32_t currentScBufferIndex;
 
+    VkRenderPass renderPass;
     VkSwapchainKHR swapChain;
     ImageBuffer* ScBuffers;
     VkCommandBuffer* cmdBuffs;
+    VkFramebuffer* frameBuffs;
+
 }VkRenderer;
 
 typedef struct VkLoader_t {
@@ -69,26 +73,4 @@ typedef struct VkEngine_t {
     VkComputer computer;
     VkLoader loader;
 }VkEngine;
-
-typedef struct VkComputePipeline_t {
-    VkPipeline pipeline;
-    VkPipelineLayout pipelineLayout;
-    VkShaderModule computeShaderModule;
-    VkDescriptorPool descriptorPool;
-    VkDescriptorSet descriptorSet;
-    VkDescriptorSetLayout descriptorSetLayout;
-    VkImage outImg;
-    VkImageView view;
-    VkSampler sampler;
-    VkDeviceMemory bufferMemory;
-    uint32_t bufferSize;
-    VkCommandBuffer commandBuffer;
-    int width;
-    int height;
-    int work_size;
-}VkComputePipeline;
-
-void dumpLayerExts ();
-uint32_t* readFile(uint32_t* length, const char* filename);
-char *read_spv(const char *filename, size_t *psize);
 #endif

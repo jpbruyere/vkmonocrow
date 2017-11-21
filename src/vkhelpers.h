@@ -23,10 +23,13 @@ VkPhysicalDevice vkh_find_phy (VkInstance inst, VkPhysicalDeviceType phyType);
 VkFence vkh_fence_create (VkDevice dev);
 VkSemaphore vkh_semaphore_create (VkDevice dev);
 VkCommandPool vkh_cmd_pool_create (VkDevice dev, uint32_t qFamIndex, VkCommandPoolCreateFlags flags);
-VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool, uint32_t buffCount);
+VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool);
 void vkh_cmd_begin(VkCommandBuffer cmdBuff, VkCommandBufferUsageFlags flags);
+void vkh_cmd_end(VkCommandBuffer cmdBuff);
 void vkh_cmd_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence);
 void vkcrow_cmd_copy_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore* pWaitSemaphore, VkSemaphore* pSignalSemaphore);
+
+VkShaderModule vkh_load_module(VkDevice dev, const char* path);
 
 void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout old_image_layout,
                       VkImageLayout new_image_layout, VkPipelineStageFlags src_stages, VkPipelineStageFlags dest_stages);

@@ -49,13 +49,13 @@ VkCommandPool vkh_cmd_pool_create (VkDevice dev, uint32_t qFamIndex, VkCommandPo
     assert (vkCreateCommandPool(dev, &cmd_pool_info, NULL, &cmdPool) == VK_SUCCESS);
     return cmdPool;
 }
-VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool, uint32_t buffCount){
+VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool){
     VkCommandBuffer cmdBuff;
     VkCommandBufferAllocateInfo cmd = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                                         .pNext = NULL,
                                         .commandPool = cmdPool,
                                         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                        .commandBufferCount = buffCount };
+                                        .commandBufferCount = 1 };
     assert (vkAllocateCommandBuffers (dev, &cmd, &cmdBuff) == VK_SUCCESS);
     return cmdBuff;
 }
@@ -67,6 +67,9 @@ void vkh_cmd_begin(VkCommandBuffer cmdBuff, VkCommandBufferUsageFlags flags) {
                                               .pInheritanceInfo = NULL };
 
     VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuff, &cmd_buf_info));
+}
+void vkh_cmd_end(VkCommandBuffer cmdBuff){
+    VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuff));
 }
 void vkh_cmd_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence){
     VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -145,6 +148,19 @@ bool memory_type_from_properties(VkPhysicalDeviceMemoryProperties memory_propert
     }
     // No memory types matched, return failure
     return false;
+}
+
+VkShaderModule vkh_load_module(VkDevice dev, const char* path){
+    VkShaderModule module;
+    size_t filelength;
+    char* pCode = read_spv(path, &filelength);
+    VkShaderModuleCreateInfo createInfo = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                                            .pCode = pCode,
+                                            .codeSize = filelength };
+    VK_CHECK_RESULT(vkCreateShaderModule(dev, &createInfo, NULL, &module));
+    free (pCode);
+    //assert(module != VK_NULL_HANDLE);
+    return module;
 }
 
 char *read_spv(const char *filename, size_t *psize) {
