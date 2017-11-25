@@ -6,11 +6,11 @@ extern "C" {
 #endif
 
 #include <vulkan/vulkan.h>
-
+#include "vkh_device.h"
 
 void vkcrow_cmd_copy_create(VkCommandBuffer cmd, VkImage bltDstImage, uint32_t width, uint32_t height);
 void vkcrow_cmd_copy_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore* pWaitSemaphore, VkSemaphore* pSignalSemaphore);
-void vkcrow_resize(VkDevice dev, VkPhysicalDeviceMemoryProperties mem_properties, uint32_t width, uint32_t height);
+void vkcrow_resize(vkh_device *pDev, uint32_t width, uint32_t height);
 void vkcrow_start();
 void vkcrow_terminate();
 void vkcrow_buffer_update ();

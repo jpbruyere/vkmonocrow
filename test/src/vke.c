@@ -14,7 +14,7 @@ bool vkeCheckPhyPropBlitSource (VkEngine *e) {
 }
 
 void initPhySurface(VkEngine* e, VkFormat preferedFormat, VkPresentModeKHR presentMode){
-    VkRenderer* r = &e->renderer;
+    vkh_presenter* r = &e->renderer;
 
     uint32_t count;
     VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR (e->phy, r->surface, &count, NULL));
@@ -48,7 +48,7 @@ void initPhySurface(VkEngine* e, VkFormat preferedFormat, VkPresentModeKHR prese
 void createSwapChain (VkEngine* e){
     // Ensure all operations on the device have been finished before destroying resources
     vkDeviceWaitIdle(e->dev);
-    VkRenderer* r = &e->renderer;
+    vkh_presenter* r = &e->renderer;
 
     VkSurfaceCapabilitiesKHR surfCapabilities;
     VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(e->phy, r->surface, &surfCapabilities));
@@ -252,7 +252,7 @@ void EngineInit (VkEngine* e) {
     glfwWindowHint(GLFW_FLOATING, GLFW_FALSE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    VkRenderer* r = &e->renderer;
+    vkh_presenter* r = &e->renderer;
 
     r->window = glfwCreateWindow(r->width, r->height, "Window Title", NULL, NULL);
 
@@ -262,7 +262,7 @@ void EngineInit (VkEngine* e) {
     vkGetPhysicalDeviceSurfaceSupportKHR(e->phy, gQueue, r->surface, &isSupported);
     assert (isSupported && "vkGetPhysicalDeviceSurfaceSupportKHR");
 
-    vkGetDeviceQueue(e->dev, gQueue, 0, &e->renderer.presentQueue);
+    vkGetDeviceQueue(e->dev, gQueue, 0, &e->renderer.queue);
     vkGetDeviceQueue(e->dev, cQueue, 0, &e->computer.queue);
     vkGetDeviceQueue(e->dev, tQueue, 0, &e->loader.queue);
 
@@ -280,7 +280,7 @@ void EngineInit (VkEngine* e) {
 void EngineTerminate (VkEngine* e) {
     vkDeviceWaitIdle(e->dev);
     vkcrow_terminate();
-    VkRenderer* r = &e->renderer;
+    vkh_presenter* r = &e->renderer;
 
     vkDestroySemaphore(e->dev, r->semaDrawEnd, NULL);
     vkDestroySemaphore(e->dev, r->semaPresentEnd, NULL);
@@ -345,7 +345,7 @@ static void mouse_button_callback(GLFWwindow* window, int but, int state, int mo
 }
 
 
-void buildCommandBuffers(VkRenderer* r){
+void buildCommandBuffers(vkh_presenter* r){
     for (int i=0;i<r->imgCount;i++) {
         vkcrow_cmd_copy_create(r->cmdBuffs[i],r->ScBuffers[i].image,r->width,r->height);
     }
@@ -353,7 +353,7 @@ void buildCommandBuffers(VkRenderer* r){
 
 
 void draw(VkEngine* e) {
-    VkRenderer* r = &e->renderer;
+    vkh_presenter* r = &e->renderer;
     // Get the index of the next available swapchain image:
     VkResult err = vkAcquireNextImageKHR(e->dev, r->swapChain, UINT64_MAX, r->semaPresentEnd, VK_NULL_HANDLE,
                                 &r->currentScBufferIndex);
@@ -363,7 +363,7 @@ void draw(VkEngine* e) {
         buildCommandBuffers(r);
     }else{
         VK_CHECK_RESULT(err);
-        vkcrow_cmd_copy_submit (r->presentQueue, &r->cmdBuffs[r->currentScBufferIndex], &r->semaPresentEnd, &r->semaDrawEnd);
+        vkcrow_cmd_copy_submit (r->queue, &r->cmdBuffs[r->currentScBufferIndex], &r->semaPresentEnd, &r->semaDrawEnd);
 
         /* Now present the image in the window */
         VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -374,7 +374,7 @@ void draw(VkEngine* e) {
                                      .pImageIndices = &r->currentScBufferIndex };
 
         /* Make sure command buffer is finished before presenting */
-        VK_CHECK_RESULT(vkQueuePresentKHR(r->presentQueue, &present));
+        VK_CHECK_RESULT(vkQueuePresentKHR(r->queue, &present));
     }
     vkcrow_buffer_update();
 }

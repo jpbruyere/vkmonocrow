@@ -13,9 +13,11 @@ out gl_PerVertex
 	vec4 gl_Position;
 };
 
+const vec2 scale=vec2(2.0/1024.0,2.0/800.0);
+const vec2 translate=vec2(-1.0);
 
 void main()
 {
 	outColor = inColor;
-	gl_Position = vec4(inPos.xy,0.0, 1.0);
+	gl_Position = vec4(inPos.xy*scale+translate,0.0, 1.0);
 }

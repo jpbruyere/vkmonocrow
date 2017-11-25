@@ -15,15 +15,18 @@
 #define NUM_SAMPLES VK_SAMPLE_COUNT_1_BIT
 #define FENCE_TIMEOUT 100000000
 
+#include "vkh_presenter.h"
+
 typedef struct ImageBuffer_t {
     VkImage image;
     VkImageView view;
 }ImageBuffer;
 
-typedef struct VkRenderer_t {
-    VkDevice dev;
-    VkQueue presentQueue;
+typedef struct vkh_presenter_t {
+    VkQueue queue;
     VkCommandPool cmdPool;
+    uint32_t qFam;
+    VkDevice dev;
 
     GLFWwindow* window;
     VkSurfaceKHR surface;
@@ -45,8 +48,7 @@ typedef struct VkRenderer_t {
     ImageBuffer* ScBuffers;
     VkCommandBuffer* cmdBuffs;
     VkFramebuffer* frameBuffs;
-
-}VkRenderer;
+}vkh_presenter;
 
 typedef struct VkLoader_t {
     VkQueue queue;
@@ -69,7 +71,7 @@ typedef struct VkEngine_t {
     uint32_t EnabledExtensionsCount;
     const char** ExtensionNames;
 
-    VkRenderer renderer;
+    vkh_presenter renderer;
     VkComputer computer;
     VkLoader loader;
 }VkEngine;

@@ -5,9 +5,12 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <math.h>
 
 #include <vulkan/vulkan.h>
+
+#define FB_COLOR_FORMAT VK_FORMAT_R8G8B8A8_UNORM
 
 #define VK_CHECK_RESULT(f) 																				\
 {																										\
@@ -34,7 +37,7 @@ VkShaderModule vkh_load_module(VkDevice dev, const char* path);
 void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout old_image_layout,
                       VkImageLayout new_image_layout, VkPipelineStageFlags src_stages, VkPipelineStageFlags dest_stages);
 
-bool memory_type_from_properties(VkPhysicalDeviceMemoryProperties memory_properties, uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex);
+bool memory_type_from_properties(VkPhysicalDeviceMemoryProperties* memory_properties, uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex);
 char *read_spv(const char *filename, size_t *psize);
 uint32_t* readFile(uint32_t* length, const char* filename);
 

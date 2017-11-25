@@ -20,6 +20,8 @@ vkh_buffer vertices = {};
 vkh_buffer indices = {};
 uint32_t indicesCount = 0;
 
+vkvg_surface surf = {};
+
 
 VkPipeline pipeline;
 VkPipelineCache pipelineCache;
@@ -287,6 +289,7 @@ void EngineInit (VkEngine* e) {
     assert (isSupported && "vkGetPhysicalDeviceSurfaceSupportKHR");
 
     vkGetDeviceQueue(e->dev, gQueue, 0, &e->renderer.queue);
+    e->renderer.qFam = gQueue;
     vkGetDeviceQueue(e->dev, cQueue, 0, &e->computer.queue);
     vkGetDeviceQueue(e->dev, tQueue, 0, &e->loader.queue);
 
@@ -331,145 +334,35 @@ static void char_callback (GLFWwindow* window, uint32_t c){}
 static void mouse_move_callback(GLFWwindow* window, double x, double y){}
 static void mouse_button_callback(GLFWwindow* window, int but, int state, int modif){}
 
-void vke_frame_buffers_create(vkh_presenter * r){
-    r->frameBuffs = (VkFramebuffer*)malloc(sizeof(VkFramebuffer)*r->imgCount);
-    for (int i=0; i<r->imgCount; i++) {
-        VkImageView attachments[1] = {r->ScBuffers[i].view};
-        VkFramebufferCreateInfo frameBufferCreateInfo = { .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-                                                          .renderPass = r->renderPass,
-                                                          .attachmentCount = 1,
-                                                          .pAttachments = attachments,
-                                                          .width = r->width,
-                                                          .height = r->height,
-                                                          .layers = 1 };
-        VK_CHECK_RESULT(vkCreateFramebuffer(r->dev, &frameBufferCreateInfo, NULL, &r->frameBuffs[i]));
-    }
-}
-void vke_frame_buffers_destroy(vkh_presenter* r){
-    for (uint32_t i = 0; i < r->imgCount; i++)
-        vkDestroyFramebuffer(r->dev, r->frameBuffs[i],NULL);
-    free(r->frameBuffs);
-}
-void vke_pipeline_create (VkEngine* e){
-    VkGraphicsPipelineCreateInfo pipelineCreateInfo = { .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                                                        .renderPass = e->renderer.renderPass };
-    VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                                                                  .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST };
-    VkPipelineRasterizationStateCreateInfo rasterizationState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                                                                  .polygonMode = VK_POLYGON_MODE_FILL,
-                                                                  .cullMode = VK_CULL_MODE_NONE,
-                                                                  .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                                                                  .depthClampEnable = VK_FALSE,
-                                                                  .rasterizerDiscardEnable = VK_FALSE,
-                                                                  .depthBiasEnable = VK_FALSE,
-                                                                  .lineWidth = 1.0f };
-    // We need one blend attachment state per color attachment (even if blending is not used
-    VkPipelineColorBlendAttachmentState blendAttachmentState = { .colorWriteMask = 0xf,
-                                                                 .blendEnable = VK_FALSE};
-    VkPipelineColorBlendStateCreateInfo colorBlendState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-                                                            .attachmentCount = 1,
-                                                            .pAttachments = &blendAttachmentState };
-    VkRect2D scissor = { .offset = {0, 0}, .extent = {e->renderer.width,e->renderer.height}};
-    VkViewport viewport = { .width = (float) e->renderer.width,
-                            .height = (float) e->renderer.height};
 
-    VkPipelineViewportStateCreateInfo viewportState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                                                        .viewportCount = 1,
-                                                        .pViewports = &viewport,
-                                                        .scissorCount = 1,
-                                                        .pScissors = &scissor};
-    VkPipelineMultisampleStateCreateInfo multisampleState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                                                              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT };
-    VkVertexInputBindingDescription vertexInputBinding = { .binding = 0,
-                                                           .stride = sizeof(Vertex),
-                                                           .inputRate = VK_VERTEX_INPUT_RATE_VERTEX };
-
-    VkVertexInputAttributeDescription vertexInputAttributs[2];
-    vertexInputAttributs[0].binding = 0;// Position attribute is three 32 bit signed (SFLOAT) floats (R32 G32 B32)
-    vertexInputAttributs[0].location = 0;
-    vertexInputAttributs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-    vertexInputAttributs[0].offset = 0;
-    vertexInputAttributs[1].binding = 0;// Color attribute is three 32 bit signed (SFLOAT) floats (R32 G32 B32)
-    vertexInputAttributs[1].location = 1;
-    vertexInputAttributs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-    vertexInputAttributs[1].offset = 3 * sizeof(float);
-
-    VkPipelineVertexInputStateCreateInfo vertexInputState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                                                              .vertexBindingDescriptionCount = 1,
-                                                              .pVertexBindingDescriptions = &vertexInputBinding,
-                                                              .vertexAttributeDescriptionCount = 2,
-                                                              .pVertexAttributeDescriptions = vertexInputAttributs };
-    VkPipelineShaderStageCreateInfo vertStage = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = vkh_load_module(e->dev, "shaders/triangle.vert.spv"),
-        .pName = "main",
-    };
-    VkPipelineShaderStageCreateInfo fragStage = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .module = vkh_load_module(e->dev, "shaders/triangle.frag.spv"),
-        .pName = "main",
-    };
-    VkPipelineShaderStageCreateInfo shaderStages[] = {vertStage,fragStage};
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                                                      .setLayoutCount = 0,
-                                                      .pushConstantRangeCount = 0 };
-    VK_CHECK_RESULT(vkCreatePipelineLayout(e->dev, &pipelineLayoutInfo, NULL, &pipelineLayout));
-
-    pipelineCreateInfo.stageCount = 2;
-    pipelineCreateInfo.pStages = shaderStages;
-    pipelineCreateInfo.pVertexInputState = &vertexInputState;
-    pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
-    pipelineCreateInfo.pViewportState = &viewportState;
-    pipelineCreateInfo.pRasterizationState = &rasterizationState;
-    pipelineCreateInfo.pMultisampleState = &multisampleState;
-    pipelineCreateInfo.pColorBlendState = &colorBlendState;
-    pipelineCreateInfo.layout = pipelineLayout;
-
-    VK_CHECK_RESULT(vkCreateGraphicsPipelines(e->dev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &pipeline));
-
-    vkDestroyShaderModule(e->dev, shaderStages[0].module, NULL);
-    vkDestroyShaderModule(e->dev, shaderStages[1].module, NULL);
-}
-void vke_pipeline_destroy (VkEngine* e){
-    vkDestroyPipeline(e->dev, pipeline, NULL);
-}
 void buildCommandBuffers(vkh_presenter* r){
-    // Set clear values for all framebuffer attachments with loadOp set to clear
-    VkClearValue clearValues[1] = {{ { 0.0f, 0.0f, 0.1f, 1.0f } }};
-
-    VkRenderPassBeginInfo renderPassBeginInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-                                                  .renderPass = r->renderPass,
-                                                  .renderArea.extent = {r->width,r->height},
-                                                  .clearValueCount = 1,
-                                                  .pClearValues = clearValues };
-
     for (int32_t i = 0; i < r->imgCount; ++i)
     {
+        VkImage bltDstImage = r->ScBuffers[i].image;
+        VkImage bltSrcImage = surf.img.image;
+
         VkCommandBuffer cb = r->cmdBuffs[i];
-        renderPassBeginInfo.framebuffer = r->frameBuffs[i];
-
         vkh_cmd_begin(cb,VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
-        vkCmdBeginRenderPass(cb, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        // Bind descriptor sets describing shader binding points
-        //vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+        set_image_layout(cb, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-        // Bind the rendering pipeline
-        // The pipeline (state object) contains all states of the rendering pipeline, binding it will set all the states specified at pipeline creation time
-        vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        set_image_layout(cb, bltSrcImage, VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-        // Bind triangle vertex buffer (contains position and colors)
-        VkDeviceSize offsets[1] = { 0 };
-        vkCmdBindVertexBuffers(cb, 0, 1, &vertices.buffer, offsets);
-        // Bind triangle index buffer
-        vkCmdBindIndexBuffer(cb, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+        VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                .srcOffset = {},
+                                .dstOffset = {0,0,0},
+                                .extent = {512,512,1}};
+        vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &cregion);
 
-        // Draw indexed triangle
-        vkCmdDrawIndexed(cb, indicesCount, 1, 0, 0, 1);
-
-        vkCmdEndRenderPass(cb);
+        set_image_layout(cb, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
         vkh_cmd_end(cb);
     }
@@ -482,10 +375,10 @@ void draw(VkEngine* e) {
                                 &r->currentScBufferIndex);
     if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)){
         vke_swapchain_create(e);
-        vke_frame_buffers_destroy(r);
-        vke_frame_buffers_create(r);
-        vke_pipeline_destroy(e);
-        vke_pipeline_create(e);
+//        vke_frame_buffers_destroy(r);
+//        vke_frame_buffers_create(r);
+//        vke_pipeline_destroy(e);
+//        vke_pipeline_create(e);
         buildCommandBuffers(r);
     }else{
         VK_CHECK_RESULT(err);
@@ -550,7 +443,7 @@ void setupRenderPass(vkh_presenter* r)
     // Color attachment
     attachments[0].format = r->format;          									// Use the color format selected by the swapchain
     attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;									// We don't use multi sampling in this example
-    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;							// Clear this attachment at the start of the render pass
+    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;							// Clear this attachment at the start of the render pass
     attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;							// Keep it's contents after the render pass is finished (for displaying it)
     attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;					// We don't use stencil, so don't care for load
     attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;				// Same for store
@@ -614,17 +507,13 @@ int main(int argc, char *argv[]) {
 
     vkvg_device_create(e.dev, e.renderer.queue, e.renderer.qFam, e.memory_properties, &device);
 
-    vkvg_surface surf = {};
+
     vkvg_surface_create (&device,512,512,&surf);
 
     vkeCheckPhyPropBlitSource (&e);
     glfwSetKeyCallback(e.renderer.window, key_callback);
 
     vke_swapchain_create(&e);
-    prepareVertices(&e);
-    setupRenderPass(&e.renderer);
-    vke_frame_buffers_create(&e.renderer);
-    vke_pipeline_create(&e);
     buildCommandBuffers(&e.renderer);
 
     vkvg_context *ctx = vkvg_create(&surf);
@@ -643,11 +532,6 @@ int main(int argc, char *argv[]) {
     }
 
     vkDeviceWaitIdle(e.dev);
-    vkh_buffer_destroy(&vertices);
-    vkh_buffer_destroy(&indices);
-
-    vke_pipeline_destroy(&e);
-    vke_frame_buffers_destroy(&e.renderer);
     vke_swapchain_destroy(&e.renderer);
 
     vkvg_destroy(ctx);

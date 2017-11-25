@@ -56,7 +56,7 @@ VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool){
                                         .commandPool = cmdPool,
                                         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
                                         .commandBufferCount = 1 };
-    assert (vkAllocateCommandBuffers (dev, &cmd, &cmdBuff) == VK_SUCCESS);
+    VK_CHECK_RESULT (vkAllocateCommandBuffers (dev, &cmd, &cmdBuff));
     return cmdBuff;
 }
 
@@ -66,10 +66,10 @@ void vkh_cmd_begin(VkCommandBuffer cmdBuff, VkCommandBufferUsageFlags flags) {
                                               .flags = flags,
                                               .pInheritanceInfo = NULL };
 
-    VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuff, &cmd_buf_info));
+    VK_CHECK_RESULT (vkBeginCommandBuffer (cmdBuff, &cmd_buf_info));
 }
 void vkh_cmd_end(VkCommandBuffer cmdBuff){
-    VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuff));
+    VK_CHECK_RESULT (vkEndCommandBuffer (cmdBuff));
 }
 void vkh_cmd_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence){
     VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -134,12 +134,12 @@ void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags
     vkCmdPipelineBarrier(cmdBuff, src_stages, dest_stages, 0, 0, NULL, 0, NULL, 1, &image_memory_barrier);
 }
 
-bool memory_type_from_properties(VkPhysicalDeviceMemoryProperties memory_properties, uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex) {
+bool memory_type_from_properties(VkPhysicalDeviceMemoryProperties* memory_properties, uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex) {
     // Search memtypes to find first index with those properties
-    for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++) {
+    for (uint32_t i = 0; i < memory_properties->memoryTypeCount; i++) {
         if ((typeBits & 1) == 1) {
             // Type is available, does it match user properties?
-            if ((memory_properties.memoryTypes[i].propertyFlags & requirements_mask) == requirements_mask) {
+            if ((memory_properties->memoryTypes[i].propertyFlags & requirements_mask) == requirements_mask) {
                 *typeIndex = i;
                 return true;
             }
