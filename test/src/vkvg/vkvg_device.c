@@ -77,7 +77,7 @@ void _setupPipelines(vkvg_device* dev)
                 .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST };
 
     VkPipelineRasterizationStateCreateInfo rasterizationState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .polygonMode = VK_POLYGON_MODE_LINE,
+                .polygonMode = VK_POLYGON_MODE_FILL,
                 .cullMode = VK_CULL_MODE_NONE,
                 .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                 .depthClampEnable = VK_FALSE,
@@ -157,6 +157,13 @@ void _setupPipelines(vkvg_device* dev)
     pipelineCreateInfo.layout = dev->pipelineLayout;
 
     VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &dev->pipeline));
+
+    rasterizationState.polygonMode = VK_POLYGON_MODE_POINT;
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &dev->pipelineWired));
+
+    rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
+    inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &dev->pipelineLineList));
 
     vkDestroyShaderModule(dev->vkDev, shaderStages[0].module, NULL);
     vkDestroyShaderModule(dev->vkDev, shaderStages[1].module, NULL);

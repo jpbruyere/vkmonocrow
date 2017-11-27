@@ -10,6 +10,8 @@ typedef struct vkvg_device_t{
 	VkCommandPool cmdPool;
 
 	VkPipeline pipeline;
+	VkPipeline pipelineWired;
+	VkPipeline pipelineLineList;
 	VkPipelineCache pipelineCache;
 	VkPipelineLayout pipelineLayout;
 }vkvg_device;

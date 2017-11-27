@@ -55,6 +55,7 @@ ADD_CUSTOM_TARGET(DataCopy ALL DEPENDS ${DATAS})
 
 IF(CMAKE_BUILD_TYPE MATCHES "Debug")
 	SET(CROWDLL_DIR "../crow/build/Debug")
+	#add_definitions( -DDEBUG=true} )
 ELSE()
 	SET(CROWDLL_DIR "../crow/build/Release")
 ENDIF()

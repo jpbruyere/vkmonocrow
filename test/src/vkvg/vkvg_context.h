@@ -13,6 +13,8 @@ typedef struct vkvg_context_t {
 	size_t sizeIndices;
 	uint32_t indCount;
 
+	uint32_t fillIndCount;
+
 	vkvg_buff vertices;
 	size_t sizeVertices;
 	uint32_t vertCount;
@@ -21,6 +23,7 @@ typedef struct vkvg_context_t {
 	vec2* points;
 	size_t sizePoints;
 	uint32_t pointCount;
+	uint32_t totalPoints;
 	uint32_t pathPtr;
 	uint32_t* pathes;
 	size_t sizePathes;
@@ -32,6 +35,8 @@ typedef struct vkvg_context_t {
 
 vkvg_context* vkvg_create (vkvg_surface* surf);
 void vkvg_destroy (vkvg_context* ctx);
+
+void vkvg_flush (vkvg_context* ctx);
 
 void vkvg_close_path (vkvg_context* ctx);
 void vkvg_line_to (vkvg_context* ctx, float x, float y);

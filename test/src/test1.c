@@ -105,7 +105,7 @@ void vke_swapchain_create (VkEngine* e){
                                             .imageColorSpace = r->colorSpace,
                                             .imageExtent = {r->width,r->height},
                                             .imageArrayLayers = 1,
-                                            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                             .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
                                             .preTransform = surfCapabilities.currentTransform,
                                             .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
@@ -356,8 +356,8 @@ void buildCommandBuffers(vkh_presenter* r){
                                 .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
                                 .srcOffset = {},
                                 .dstOffset = {0,0,0},
-                                .extent = {512,512,1}};
-        vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                .extent = {1024,800,1}};
+        vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_UNDEFINED,
                        1, &cregion);
 
         set_image_layout(cb, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
@@ -375,10 +375,6 @@ void draw(VkEngine* e) {
                                 &r->currentScBufferIndex);
     if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)){
         vke_swapchain_create(e);
-//        vke_frame_buffers_destroy(r);
-//        vke_frame_buffers_create(r);
-//        vke_pipeline_destroy(e);
-//        vke_pipeline_create(e);
         buildCommandBuffers(r);
     }else{
         VK_CHECK_RESULT(err);
@@ -397,107 +393,6 @@ void draw(VkEngine* e) {
     }
 }
 
-void prepareVertices(VkEngine* e)
-{
-    Vertex vertexBuffer[] = {
-        { {  100.5f,  100.0f, 0.0f }, { 0.0f, 1.0f, 1.0f } },
-        { {  101.5f,  600.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
-        { {  100.5f, 600.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
-        { {  101.5f, 100.0f, 0.0f }, { 0.0f, 1.0f, 1.0f } },
-        { {  110.0f,  100.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
-        { {  115.0f,  600.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
-        { {  114.0f, 600.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
-        { {  111.0f, 100.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } },
-    };
-    uint32_t vertexBufferSize = sizeof(Vertex) * 8;
-
-    // Setup indices
-    uint32_t indexBuffer[] = {  0, 1, 2, 0, 3, 1,
-                                4, 5, 6, 4, 7, 5};
-    indicesCount = 12;
-    uint32_t indexBufferSize = indicesCount * sizeof(uint32_t);
-
-    vkh_buffer_create(&device,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        vertexBufferSize, &vertices);
-    vkh_buffer_map(&vertices);
-    memcpy(vertices.mapped, vertexBuffer, vertexBufferSize);
-    vkh_buffer_unmap(&vertices);
-
-    vkh_buffer_create(&device,
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        indexBufferSize,&indices);
-    vkh_buffer_map(&indices);
-    memcpy(indices.mapped, indexBuffer, indexBufferSize);
-    vkh_buffer_unmap(&indices);
-}
-void setupRenderPass(vkh_presenter* r)
-{
-    // This example will use a single render pass with one subpass
-
-    // Descriptors for the attachments used by this renderpass
-    VkAttachmentDescription attachments[1];
-
-    // Color attachment
-    attachments[0].format = r->format;          									// Use the color format selected by the swapchain
-    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;									// We don't use multi sampling in this example
-    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;							// Clear this attachment at the start of the render pass
-    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;							// Keep it's contents after the render pass is finished (for displaying it)
-    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;					// We don't use stencil, so don't care for load
-    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;				// Same for store
-    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;						// Layout at render pass start. Initial doesn't matter, so we use undefined
-    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;					// Layout to which the attachment is transitioned when the render pass is finished
-                                                                                    // As we want to present the color buffer to the swapchain, we transition to PRESENT_KHR
-    // Setup attachment references
-    VkAttachmentReference colorReference = {
-        .attachment = 0,                                                            // Attachment 0 is color
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };       				// Attachment layout used as color during the subpass
-
-    // Setup a single subpass reference
-    VkSubpassDescription subpassDescription = { .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        .colorAttachmentCount = 1,									// Subpass uses one color attachment
-                        .pColorAttachments = &colorReference };						// Reference to the color attachment in slot 0
-    // Setup subpass dependencies
-    // These will add the implicit ttachment layout transitionss specified by the attachment descriptions
-    // The actual usage layout is preserved through the layout specified in the attachment reference
-    // Each subpass dependency will introduce a memory and execution dependency between the source and dest subpass described by
-    // srcStageMask, dstStageMask, srcAccessMask, dstAccessMask (and dependencyFlags is set)
-    // Note: VK_SUBPASS_EXTERNAL is a special constant that refers to all commands executed outside of the actual renderpass)
-    VkSubpassDependency dependencies[2];
-
-    // First dependency at the start of the renderpass
-    // Does the transition from final to initial layout
-    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;								// Producer of the dependency
-    dependencies[0].dstSubpass = 0;													// Consumer is our single subpass that will wait for the execution depdendency
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-    // Second dependency at the end the renderpass
-    // Does the transition from the initial to the final layout
-    dependencies[1].srcSubpass = 0;													// Producer of the dependency is our single subpass
-    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;								// Consumer are all commands outside of the renderpass
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    // Create the actual renderpass
-    VkRenderPassCreateInfo renderPassInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                .attachmentCount = 1,                               // Number of attachments used by this render pass
-                .pAttachments = attachments,                        // Descriptions of the attachments used by the render pass
-                .subpassCount = 1,									// We only use one subpass in this example
-                .pSubpasses = &subpassDescription,					// Description of that subpass
-                .dependencyCount = 2,                               // Number of subpass dependencies
-                .pDependencies = dependencies };    				// Subpass dependencies used by the render pass
-
-    VK_CHECK_RESULT(vkCreateRenderPass(r->dev, &renderPassInfo, NULL, &r->renderPass));
-}
-
 int main(int argc, char *argv[]) {
     dumpLayerExts();
 
@@ -508,23 +403,36 @@ int main(int argc, char *argv[]) {
     vkvg_device_create(e.dev, e.renderer.queue, e.renderer.qFam, e.memory_properties, &device);
 
 
-    vkvg_surface_create (&device,512,512,&surf);
+    vkvg_surface_create (&device,1024,800,&surf);
 
     vkeCheckPhyPropBlitSource (&e);
     glfwSetKeyCallback(e.renderer.window, key_callback);
 
     vke_swapchain_create(&e);
-    buildCommandBuffers(&e.renderer);
+
 
     vkvg_context *ctx = vkvg_create(&surf);
 
+    ctx->lineWidth = 20;
     vkvg_set_rgba(ctx,1,0,0,1);
-    vkvg_move_to(ctx,10,10);
-    vkvg_line_to(ctx,100,100);
-    vkvg_line_to(ctx,10,100);
+    vkvg_move_to(ctx,200,200);
+    vkvg_line_to(ctx,400,200);
+    vkvg_line_to(ctx,400,400);
+    vkvg_line_to(ctx,200,400);
+    vkvg_close_path(ctx);
+    vkvg_stroke(ctx);
+    vkvg_set_rgba(ctx,0,1,0,1);
+    vkvg_move_to(ctx,300,300);
+    vkvg_line_to(ctx,500,300);
+    vkvg_line_to(ctx,500,500);
+    vkvg_line_to(ctx,300,500);
     vkvg_close_path(ctx);
     vkvg_stroke(ctx);
 
+    vkvg_flush(ctx);
+    vkDeviceWaitIdle(e.dev);
+
+    buildCommandBuffers(&e.renderer);
 
     while (!glfwWindowShouldClose(e.renderer.window)) {
         glfwPollEvents();
