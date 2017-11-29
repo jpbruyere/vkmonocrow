@@ -1,5 +1,8 @@
 #include "vkh_image.h"
 
+static VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+static VkImageTiling tiling = VK_IMAGE_TILING_LINEAR;
+
 void vkh_image_create (vkh_device *pDev,
                            VkFormat format, uint32_t width, uint32_t height,
                            VkMemoryPropertyFlags memprops,
@@ -10,16 +13,18 @@ void vkh_image_create (vkh_device *pDev,
     img->height = height;
     img->format = format;
     img->layout = layout;
+    img->samples = samples;
     VkImageCreateInfo image_info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
                                      .imageType = VK_IMAGE_TYPE_2D,
-                                     .tiling = VK_IMAGE_TILING_LINEAR,
+                                     .tiling = tiling,
                                      .initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
+                                     .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
                                      .usage = usage,
                                      .format = format,
                                      .extent = {width,height,1},
                                      .mipLevels = 1,
                                      .arrayLayers = 1,
-                                     .samples = VK_SAMPLE_COUNT_1_BIT };
+                                     .samples = samples };
 
     VK_CHECK_RESULT(vkCreateImage(pDev->vkDev, &image_info, NULL, &img->image));
 
@@ -31,6 +36,16 @@ void vkh_image_create (vkh_device *pDev,
     VK_CHECK_RESULT(vkAllocateMemory(pDev->vkDev, &memAllocInfo, NULL, &img->memory));
     VK_CHECK_RESULT(vkBindImageMemory(pDev->vkDev, img->image, img->memory, 0));
 }
+void vkh_image_ms_create (vkh_device *pDev,
+                           VkFormat format, VkSampleCountFlagBits num_samples, uint32_t width, uint32_t height,
+                           VkMemoryPropertyFlags memprops,
+                           VkImageUsageFlags usage, VkImageLayout layout, vkh_image* img){
+    samples = num_samples;
+    tiling = VK_IMAGE_TILING_OPTIMAL;
+    vkh_image_create(pDev,format,width,height,memprops,usage,layout,img);
+    samples = VK_SAMPLE_COUNT_1_BIT;
+    tiling = VK_IMAGE_TILING_LINEAR;
+}
 void vkh_image_create_descriptor(vkh_image* img)
 {
     img->pDescriptor = (VkDescriptorImageInfo*)malloc(sizeof(VkDescriptorImageInfo));
@@ -39,6 +54,7 @@ void vkh_image_create_descriptor(vkh_image* img)
                                          .image = img->image,
                                          .viewType = VK_IMAGE_VIEW_TYPE_2D,
                                          .format = img->format,
+                                         .components = {VK_COMPONENT_SWIZZLE_R,VK_COMPONENT_SWIZZLE_G,VK_COMPONENT_SWIZZLE_B,VK_COMPONENT_SWIZZLE_A},
                                          .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
     VK_CHECK_RESULT(vkCreateImageView(img->pDev->vkDev, &viewInfo, NULL, &img->pDescriptor->imageView));
 

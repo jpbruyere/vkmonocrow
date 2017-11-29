@@ -165,7 +165,7 @@ void _init_cmd_buff (vkvg_context* ctx){
 	VkRect2D scissor = {{0,0},{ctx->pSurf->width,ctx->pSurf->height}};
 	vkCmdSetScissor(ctx->cmd, 0, 1, &scissor);
 	//vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-	vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineWired);
+	vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipeline);
 }
 void _check_vertex_buff_size (vkvg_context* ctx){
 	if (ctx->sizeVertices - ctx->vertCount > VKVG_ARRAY_THRESHOLD)

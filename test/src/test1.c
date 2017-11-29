@@ -133,6 +133,7 @@ void vke_swapchain_create (VkEngine* e){
                                              .image = images[i],
                                              .viewType = VK_IMAGE_VIEW_TYPE_2D,
                                              .format = r->format,
+                                             .components = {VK_COMPONENT_SWIZZLE_R,VK_COMPONENT_SWIZZLE_G,VK_COMPONENT_SWIZZLE_B,VK_COMPONENT_SWIZZLE_A},
                                              .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
         VK_CHECK_RESULT(vkCreateImageView(e->dev, &createInfo, NULL, &sc_buffer.view));
         sc_buffer.image = images[i];
@@ -152,10 +153,22 @@ void vke_swapchain_destroy (vkh_presenter* r){
     free(r->cmdBuffs);
 }
 
+VkSampleCountFlagBits getMaxUsableSampleCount(VkSampleCountFlags counts)
+{
+    if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+    if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+    if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+    if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+    if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+    if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+    return VK_SAMPLE_COUNT_1_BIT;
+}
+
 void EngineInit (VkEngine* e) {
     glfwInit();
     assert (glfwVulkanSupported()==GLFW_TRUE);
     e->ExtensionNames = glfwGetRequiredInstanceExtensions (&e->EnabledExtensionsCount);
+
 
     e->infos.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     e->infos.pNext = NULL;
@@ -169,8 +182,9 @@ void EngineInit (VkEngine* e) {
 
     const uint32_t enabledLayersCount = 1;
 
-    const char* enabledLayers[] = {"VK_LAYER_LUNARG_core_validation"};
-    //const char* enabledLayers[] = {"VK_LAYER_LUNARG_standard_validation"};
+    //const char* enabledLayers[] = {"VK_LAYER_LUNARG_core_validation"};
+    const char* enabledExtentions[] = {"VK_KHR_surface", "VK_KHR_swapchain"};
+    const char* enabledLayers[] = {"VK_LAYER_LUNARG_standard_validation"};
 
     VkInstanceCreateInfo inst_info = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
                                        .pNext = NULL,
@@ -187,6 +201,8 @@ void EngineInit (VkEngine* e) {
 
     vkGetPhysicalDeviceMemoryProperties(e->phy, &e->memory_properties);
     vkGetPhysicalDeviceProperties(e->phy, &e->gpu_props);
+
+    printf("max samples = %d\n", getMaxUsableSampleCount(e->gpu_props.limits.framebufferColorSampleCounts));
 
     uint32_t queue_family_count = 0;
     int cQueue = -1, gQueue = -1, tQueue = -1;
@@ -352,13 +368,34 @@ void buildCommandBuffers(vkh_presenter* r){
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-        VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                .srcOffset = {},
-                                .dstOffset = {0,0,0},
-                                .extent = {1024,800,1}};
-        vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_UNDEFINED,
-                       1, &cregion);
+        //if (VKVG_SAMPLES == VK_SAMPLE_COUNT_1_BIT){
+            VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                    .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                    .srcOffset = {},
+                                    .dstOffset = {0,0,0},
+                                    .extent = {1024,800,1}};
+
+            vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_GENERAL,
+                           1, &cregion);
+//            VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+//                                           .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+//                                           .srcOffsets[0] = {0,0,0},
+//                                           .srcOffsets[1] = {1024,800,1},
+//                                           .dstOffsets[0] = {0,0,0},
+//                                           .dstOffsets[1] = {1024,800,1} };
+
+//            vkCmdBlitImage(cb, bltSrcImage,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,bltDstImage,VK_IMAGE_LAYOUT_GENERAL,
+//                1, &region, VK_FILTER_LINEAR);
+//        }else{
+//            VkImageResolve resolveInfo = {
+//                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {0,0,0},
+//                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {0,0,0},
+//                {1024,800,1}
+//            };
+
+//            vkCmdResolveImage(cb,bltSrcImage,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,bltDstImage,VK_IMAGE_LAYOUT_GENERAL,
+//                              1, &resolveInfo);
+//        }
 
         set_image_layout(cb, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -440,8 +477,6 @@ void vkvg_test_stroke(vkvg_context* ctx){
     vkvg_move_to(ctx,100,50);
     vkvg_line_to(ctx,400,50);
     vkvg_stroke(ctx);
-
-    vkvg_flush(ctx);
 }
 
 
@@ -466,7 +501,9 @@ int main(int argc, char *argv[]) {
 
     vkvg_context *ctx = vkvg_create(&surf);
 
+    vkvg_test_stroke(ctx);
     vkvg_test_fill(ctx);
+
 
     vkvg_destroy(ctx);
 

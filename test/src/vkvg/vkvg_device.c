@@ -26,19 +26,34 @@ void vkvg_device_destroy(vkvg_device* dev)
 
 void _setupRenderPass(vkvg_device* dev)
 {
+    VkAttachmentDescription resolveAttachment = {
+                    .format = FB_COLOR_FORMAT,
+                    .samples = VKVG_SAMPLES,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     VkAttachmentDescription attachment = {
                     .format = FB_COLOR_FORMAT,
                     .samples = VK_SAMPLE_COUNT_1_BIT,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                    .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+                    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
+    VkAttachmentDescription attachments[] = {resolveAttachment,attachment};
     VkAttachmentReference colorReference = {
         .attachment = 0,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+    VkAttachmentReference resolveReference = {
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     VkSubpassDescription subpassDescription = { .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        .colorAttachmentCount = 1,									// Subpass uses one color attachment
-                        .pColorAttachments = &colorReference };						// Reference to the color attachment in slot 0
+                        .colorAttachmentCount = 1,
+                        .pColorAttachments = &colorReference,
+                        .pResolveAttachments = & resolveReference };
     VkSubpassDependency dep0 = {
         .srcSubpass = VK_SUBPASS_EXTERNAL,
         .dstSubpass = 0,
@@ -58,8 +73,8 @@ void _setupRenderPass(vkvg_device* dev)
 
     VkSubpassDependency dependencies[] = {dep0,dep1};
     VkRenderPassCreateInfo renderPassInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                .attachmentCount = 1,
-                .pAttachments = &attachment,
+                .attachmentCount = 2,
+                .pAttachments = attachments,
                 .subpassCount = 1,
                 .pSubpasses = &subpassDescription,
                 .dependencyCount = 2,
@@ -104,7 +119,11 @@ void _setupPipelines(vkvg_device* dev)
                 .viewportCount = 1, .scissorCount = 1 };
 
     VkPipelineMultisampleStateCreateInfo multisampleState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                                                              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT };
+                .rasterizationSamples = VKVG_SAMPLES };
+    if (VKVG_SAMPLES != VK_SAMPLE_COUNT_1_BIT){
+        multisampleState.sampleShadingEnable = VK_TRUE;
+        multisampleState.minSampleShading = 0.0f;
+    }
     VkVertexInputBindingDescription vertexInputBinding = { .binding = 0,
                 .stride = sizeof(Vertex),
                 .inputRate = VK_VERTEX_INPUT_RATE_VERTEX };

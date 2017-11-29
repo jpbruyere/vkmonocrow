@@ -10,7 +10,7 @@
 
 #include <vulkan/vulkan.h>
 
-#define FB_COLOR_FORMAT VK_FORMAT_R8G8B8A8_UNORM
+#define FB_COLOR_FORMAT VK_FORMAT_B8G8R8A8_UNORM
 
 #define VK_CHECK_RESULT(f) 																				\
 {																										\
