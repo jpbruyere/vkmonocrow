@@ -137,7 +137,7 @@ void vke_swapchain_create (VkEngine* e){
         VK_CHECK_RESULT(vkCreateImageView(e->dev, &createInfo, NULL, &sc_buffer.view));
         sc_buffer.image = images[i];
         r->ScBuffers [i] = sc_buffer;
-        r->cmdBuffs [i] = vkh_cmd_buff_create(e->dev, e->renderer.cmdPool);
+        r->cmdBuffs [i] = vkh_cmd_buff_create(e->dev, e->renderer.cmdPool,VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     }
     r->currentScBufferIndex = 0;
 }
@@ -392,6 +392,59 @@ void draw(VkEngine* e) {
         VK_CHECK_RESULT(vkQueuePresentKHR(r->queue, &present));
     }
 }
+void vkvg_test_fill(vkvg_context* ctx){
+    vkvg_set_rgba(ctx,1,0,0,1);
+    vkvg_move_to(ctx,200,200);
+    vkvg_line_to(ctx,250,150);
+    vkvg_line_to(ctx,200,100);
+    vkvg_line_to(ctx,300,150);
+    vkvg_line_to(ctx,700,100);
+    vkvg_line_to(ctx,400,200);
+    vkvg_line_to(ctx,400,400);
+    vkvg_line_to(ctx,200,400);
+    vkvg_line_to(ctx,300,300);
+    vkvg_close_path(ctx);
+    vkvg_fill(ctx);
+}
+
+void vkvg_test_stroke(vkvg_context* ctx){
+    ctx->lineWidth = 20;
+    vkvg_set_rgba(ctx,1,0,0,1);
+    vkvg_move_to(ctx,200,200);
+    vkvg_line_to(ctx,400,200);
+    vkvg_line_to(ctx,400,400);
+    vkvg_line_to(ctx,200,400);
+    vkvg_close_path(ctx);
+    vkvg_stroke(ctx);
+    vkvg_set_rgba(ctx,0.5,1,0,1);
+    vkvg_move_to(ctx,300,300);
+    vkvg_line_to(ctx,500,300);
+    vkvg_line_to(ctx,500,500);
+    vkvg_line_to(ctx,300,500);
+    vkvg_close_path(ctx);
+    vkvg_stroke(ctx);
+    ctx->lineWidth = 10;
+    vkvg_set_rgba(ctx,0.5,0.6,1,1);
+    vkvg_move_to(ctx,700,475);
+    vkvg_line_to(ctx,400,475);
+    vkvg_stroke(ctx);
+    vkvg_set_rgba(ctx,1,0,1,1);
+    vkvg_move_to(ctx,700,500);
+
+    vkvg_arc(ctx, 600,500,100,M_PI, 2.0*M_PI);
+    vkvg_stroke(ctx);
+
+
+    ctx->lineWidth = 20;
+    vkvg_set_rgba(ctx,1,1,0,1);
+    vkvg_move_to(ctx,100,50);
+    vkvg_line_to(ctx,400,50);
+    vkvg_stroke(ctx);
+
+    vkvg_flush(ctx);
+}
+
+
 
 int main(int argc, char *argv[]) {
     dumpLayerExts();
@@ -413,24 +466,9 @@ int main(int argc, char *argv[]) {
 
     vkvg_context *ctx = vkvg_create(&surf);
 
-    ctx->lineWidth = 20;
-    vkvg_set_rgba(ctx,1,0,0,1);
-    vkvg_move_to(ctx,200,200);
-    vkvg_line_to(ctx,400,200);
-    vkvg_line_to(ctx,400,400);
-    vkvg_line_to(ctx,200,400);
-    vkvg_close_path(ctx);
-    vkvg_stroke(ctx);
-    vkvg_set_rgba(ctx,0,1,0,1);
-    vkvg_move_to(ctx,300,300);
-    vkvg_line_to(ctx,500,300);
-    vkvg_line_to(ctx,500,500);
-    vkvg_line_to(ctx,300,500);
-    vkvg_close_path(ctx);
-    vkvg_stroke(ctx);
+    vkvg_test_fill(ctx);
 
-    vkvg_flush(ctx);
-    vkDeviceWaitIdle(e.dev);
+    vkvg_destroy(ctx);
 
     buildCommandBuffers(&e.renderer);
 
@@ -442,7 +480,6 @@ int main(int argc, char *argv[]) {
     vkDeviceWaitIdle(e.dev);
     vke_swapchain_destroy(&e.renderer);
 
-    vkvg_destroy(ctx);
     vkvg_surface_destroy(&surf);
     vkvg_device_destroy(&device);
 

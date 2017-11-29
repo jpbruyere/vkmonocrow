@@ -26,7 +26,7 @@ VkPhysicalDevice vkh_find_phy (VkInstance inst, VkPhysicalDeviceType phyType);
 VkFence vkh_fence_create (VkDevice dev);
 VkSemaphore vkh_semaphore_create (VkDevice dev);
 VkCommandPool vkh_cmd_pool_create (VkDevice dev, uint32_t qFamIndex, VkCommandPoolCreateFlags flags);
-VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool);
+VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool, VkCommandBufferLevel level);
 void vkh_cmd_begin(VkCommandBuffer cmdBuff, VkCommandBufferUsageFlags flags);
 void vkh_cmd_end(VkCommandBuffer cmdBuff);
 void vkh_cmd_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence);

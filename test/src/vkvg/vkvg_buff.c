@@ -1,13 +1,7 @@
 #include "vkvg_buff.h"
 #include "vkhelpers.h"
 
-void vkvg_buffer_create(vkh_device *pDev, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, vkvg_buff *buff){
-    buff->pDev = pDev;
-    VkBufferCreateInfo bufCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .usage = usage, .size = size, .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
-    VK_CHECK_RESULT(vkCreateBuffer(pDev->vkDev, &bufCreateInfo, NULL, &buff->buffer));
-
+void _set_size_and_map(vkh_device *pDev, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, vkvg_buff *buff){
     VkMemoryRequirements memReq;
     vkGetBufferMemoryRequirements(pDev->vkDev, buff->buffer, &memReq);
     VkMemoryAllocateInfo memAllocInfo = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -24,6 +18,16 @@ void vkvg_buffer_create(vkh_device *pDev, VkBufferUsageFlags usage, VkMemoryProp
     VK_CHECK_RESULT(vkMapMemory(buff->pDev->vkDev, buff->memory, 0, VK_WHOLE_SIZE, 0, &buff->mapped));
 }
 
+void vkvg_buffer_create(vkh_device *pDev, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, vkvg_buff *buff){
+    buff->pDev = pDev;
+    VkBufferCreateInfo bufCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .usage = usage, .size = size, .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+    VK_CHECK_RESULT(vkCreateBuffer(pDev->vkDev, &bufCreateInfo, NULL, &buff->buffer));
+
+    _set_size_and_map(pDev,usage,memoryPropertyFlags,size,buff);
+}
+
 void vkvg_buffer_destroy(vkvg_buff *buff){
     vkUnmapMemory(buff->pDev->vkDev, buff->memory);
     vkDestroyBuffer(buff->pDev->vkDev, buff->buffer, NULL);
@@ -35,6 +39,7 @@ void vkvg_buffer_increase_size(vkvg_buff *buff, uint32_t sizeAdded){
     size_t oldBSize = buff->size;
     void* pSave = (void*)malloc (oldBSize);
     memcpy (pSave, buff->mapped, oldBSize);
+
     vkvg_buffer_destroy(buff);
     vkvg_buffer_create(buff->pDev, buff->usageFlags, buff->memoryPropertyFlags, oldBSize + sizeAdded, buff);
     memcpy (buff->mapped, pSave, oldBSize);

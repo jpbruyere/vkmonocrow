@@ -7,6 +7,7 @@
 typedef struct vkvg_context_t {
 	vkvg_surface* pSurf;
 	VkCommandBuffer cmd;
+	VkFence flushFence;
 
 	//vk buffers, holds data until flush
 	vkvg_buff indices;
@@ -41,6 +42,7 @@ void vkvg_flush (vkvg_context* ctx);
 void vkvg_close_path (vkvg_context* ctx);
 void vkvg_line_to (vkvg_context* ctx, float x, float y);
 void vkvg_move_to (vkvg_context* ctx, float x, float y);
+void vkvg_arc (vkvg_context* ctx, float xc, float yc, float radius, float a1, float a2);
 void vkvg_stroke (vkvg_context* ctx);
 void vkvg_set_rgba (vkvg_context* ctx, float r, float g, float b, float a);
 #endif

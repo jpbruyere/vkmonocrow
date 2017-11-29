@@ -46,15 +46,15 @@ VkCommandPool vkh_cmd_pool_create (VkDevice dev, uint32_t qFamIndex, VkCommandPo
                                               .pNext = NULL,
                                               .queueFamilyIndex = qFamIndex,
                                               .flags = flags };
-    assert (vkCreateCommandPool(dev, &cmd_pool_info, NULL, &cmdPool) == VK_SUCCESS);
+    VK_CHECK_RESULT (vkCreateCommandPool(dev, &cmd_pool_info, NULL, &cmdPool));
     return cmdPool;
 }
-VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool){
+VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool, VkCommandBufferLevel level){
     VkCommandBuffer cmdBuff;
     VkCommandBufferAllocateInfo cmd = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                                         .pNext = NULL,
                                         .commandPool = cmdPool,
-                                        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                        .level = level,
                                         .commandBufferCount = 1 };
     VK_CHECK_RESULT (vkAllocateCommandBuffers (dev, &cmd, &cmdBuff));
     return cmdBuff;

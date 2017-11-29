@@ -10,7 +10,7 @@ void vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPhysical
     dev->phyMemProps = memprops;
 
     dev->queue = queue;
-    dev->cmdPool = vkh_cmd_pool_create (dev->vkDev, qFam, 0);
+    dev->cmdPool = vkh_cmd_pool_create (dev->vkDev, qFam, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     _setupRenderPass (dev);
     _setupPipelines (dev);
@@ -29,7 +29,7 @@ void _setupRenderPass(vkvg_device* dev)
     VkAttachmentDescription attachment = {
                     .format = FB_COLOR_FORMAT,
                     .samples = VK_SAMPLE_COUNT_1_BIT,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                     .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
@@ -158,7 +158,8 @@ void _setupPipelines(vkvg_device* dev)
 
     VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &dev->pipeline));
 
-    rasterizationState.polygonMode = VK_POLYGON_MODE_POINT;
+    inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    rasterizationState.polygonMode = VK_POLYGON_MODE_LINE;
     VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &dev->pipelineWired));
 
     rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
