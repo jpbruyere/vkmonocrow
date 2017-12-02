@@ -14,8 +14,8 @@ void vkvg_surface_create(vkvg_device* dev, int32_t width, uint32_t height, vkvg_
                                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT ,
                                      VK_IMAGE_LAYOUT_PREINITIALIZED,&surf->imgMS);
 
-    vkh_image_create_descriptor(&surf->img);
-    vkh_image_create_descriptor(&surf->imgMS);
+    vkh_image_create_descriptor(&surf->img, VK_IMAGE_VIEW_TYPE_2D);
+    vkh_image_create_descriptor(&surf->imgMS, VK_IMAGE_VIEW_TYPE_2D);
 
     VkImageView attachments[] = {surf->imgMS.pDescriptor->imageView, surf->img.pDescriptor->imageView };
     VkFramebufferCreateInfo frameBufferCreateInfo = { .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -32,4 +32,5 @@ void vkvg_surface_destroy(vkvg_surface* surf)
 {
     vkDestroyFramebuffer(surf->dev->vkDev, surf->fb, NULL);
     vkh_image_destroy(&surf->img);
+    vkh_image_destroy(&surf->imgMS);
 }

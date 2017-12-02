@@ -1,10 +1,6 @@
 #include "vkvg.h"
-
-#include <math.h>
-#include "vkvg_internal.h"
-
-
 #include "vkvg_context_internal.h"
+#include "vkvg_fonts.h"
 
 #ifdef DEBUG
 static vec2 debugLinePoints[1000];
@@ -165,7 +161,7 @@ void vkvg_move_to (vkvg_context* ctx, float x, float y)
 }
 
 void add_line(vkvg_context* ctx, vec2 p1, vec2 p2, vec4 col){
-    Vertex v = {{p1.x,p1.y},col,{0,0}};
+    Vertex v = {{p1.x,p1.y},col,{0,0,-1}};
     _add_vertex(ctx, v);
     v.pos = p2;
     _add_vertex(ctx, v);
@@ -173,24 +169,6 @@ void add_line(vkvg_context* ctx, vec2 p1, vec2 p2, vec4 col){
     inds[0] = ctx->vertCount - 2;
     inds[1] = ctx->vertCount - 1;
     ctx->indCount+=2;
-}
-void _add_tri_indices_for_rect (vkvg_context* ctx, uint32_t i){
-    uint32_t* inds = (uint32_t*)(ctx->indices.mapped + (ctx->indCount * sizeof(uint32_t)));
-    uint32_t ii = 2*i;
-    inds[0] = ii;
-    inds[1] = ii+2;
-    inds[2] = ii+1;
-    inds[3] = ii+1;
-    inds[4] = ii+2;
-    inds[5] = ii+3;
-    ctx->indCount+=6;
-}
-void _add_triangle_indices(vkvg_context* ctx, uint32_t i0, uint32_t i1,uint32_t i2){
-    uint32_t* inds = (uint32_t*)(ctx->indices.mapped + (ctx->indCount * sizeof(uint32_t)));
-    inds[0] = i0;
-    inds[1] = i1;
-    inds[2] = i2;
-    ctx->indCount+=3;
 }
 
 void _build_vb_step (vkvg_context* ctx, Vertex v, double hw, uint32_t iL, uint32_t i, uint32_t iR){
@@ -221,11 +199,12 @@ void _build_vb_step (vkvg_context* ctx, Vertex v, double hw, uint32_t iL, uint32
     debugLinePoints[dlpCount+1] = ctx->points[iR];
     dlpCount+=2;
 #endif
+    uint32_t firstIdx = ctx->vertCount;
     v.pos = vec2_add(ctx->points[i], _vec2dToVec2(bisec));
     _add_vertex(ctx, v);
     v.pos = _v2sub(ctx->points[i], _vec2dToVec2(bisec));
     _add_vertex(ctx, v);
-    _add_tri_indices_for_rect(ctx, i+ctx->totalPoints);
+    _add_tri_indices_for_rect(ctx, firstIdx);
 }
 typedef struct _ear_clip_point{
     vec2 pos;
@@ -264,6 +243,7 @@ void vkvg_fill (vkvg_context* ctx){
 
     uint32_t lastPathPointIdx, iL, iR;
     Vertex v = { .col = ctx->curRGBA };
+    v.uv.z = -1;
 
     while (ptrPath < ctx->pathPtr){
         if (!_path_is_closed(ctx,ptrPath)){
@@ -339,12 +319,17 @@ void vkvg_stroke (vkvg_context* ctx)
         return;
 
     Vertex v = { .col = ctx->curRGBA };
+    v.uv.z = -1;
+
     float hw = ctx->lineWidth / 2.0;
     int i = 0, ptrPath = 0;
 
     uint32_t lastPathPointIdx, iL, iR;
 
+
+
     while (ptrPath < ctx->pathPtr){
+        uint32_t firstIdx = ctx->vertCount;
 
         if (_path_is_closed(ctx,ptrPath)){
             lastPathPointIdx = _get_last_point_of_closed_path(ctx,ptrPath);
@@ -359,7 +344,7 @@ void vkvg_stroke (vkvg_context* ctx)
             _add_vertex(ctx, v);
             v.pos = _v2sub(ctx->points[i], _vec2dToVec2(bisec));
             _add_vertex(ctx, v);
-            _add_tri_indices_for_rect(ctx, i+ctx->totalPoints);
+            _add_tri_indices_for_rect(ctx, firstIdx);
 
             iL = i++;
         }
@@ -386,7 +371,7 @@ void vkvg_stroke (vkvg_context* ctx)
             _build_vb_step(ctx,v,hw,iL,i,iR);
 
             uint32_t* inds = (uint32_t*)(ctx->indices.mapped + ((ctx->indCount-6) * sizeof(uint32_t)));
-            uint32_t ii = (ctx->totalPoints + ctx->pathes[ptrPath])*2;
+            uint32_t ii = firstIdx;
             inds[1] = ii;
             inds[4] = ii;
             inds[5] = ii+1;
@@ -408,3 +393,13 @@ void vkvg_set_rgba (vkvg_context* ctx, float r, float g, float b, float a)
 }
 
 
+void vkvg_select_font_face (vkvg_context* ctx, const char* name){
+
+    _select_font_face (ctx, name);
+}
+void vkvg_set_font_size (vkvg_context* ctx, uint32_t size){
+
+}
+void vkvg_show_text (vkvg_context* ctx, const char* text){
+    _show_text(ctx,text);
+}

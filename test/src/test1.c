@@ -202,6 +202,14 @@ void EngineInit (VkEngine* e) {
     vkGetPhysicalDeviceMemoryProperties(e->phy, &e->memory_properties);
     vkGetPhysicalDeviceProperties(e->phy, &e->gpu_props);
 
+    /*VkImageFormatProperties imgProps = {};
+    vkGetPhysicalDeviceImageFormatProperties(e->phy,
+                                             VK_FORMAT_R8_UNORM,
+                                             VK_IMAGE_TYPE_2D,
+                                             VK_IMAGE_TILING_OPTIMAL,
+                                             VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                             NULL,&imgProps );*/
+
     printf("max samples = %d\n", getMaxUsableSampleCount(e->gpu_props.limits.framebufferColorSampleCounts));
 
     uint32_t queue_family_count = 0;
@@ -430,22 +438,16 @@ void draw(VkEngine* e) {
     }
 }
 void vkvg_test_fill(vkvg_context* ctx){
-    vkvg_set_rgba(ctx,1,0,0,1);
-    vkvg_move_to(ctx,200,200);
-    vkvg_line_to(ctx,250,150);
-    vkvg_line_to(ctx,200,100);
-    vkvg_line_to(ctx,300,150);
-    vkvg_line_to(ctx,700,100);
-    vkvg_line_to(ctx,400,200);
-    vkvg_line_to(ctx,400,400);
-    vkvg_line_to(ctx,200,400);
-    vkvg_line_to(ctx,300,300);
+    vkvg_set_rgba(ctx,0,1,0,1);
+    vkvg_move_to(ctx,900,700);
+    vkvg_line_to(ctx,950,750);
+    vkvg_line_to(ctx,900,800);
     vkvg_close_path(ctx);
     vkvg_fill(ctx);
 }
 
 void vkvg_test_stroke(vkvg_context* ctx){
-    ctx->lineWidth = 20;
+    ctx->lineWidth = 5;
     vkvg_set_rgba(ctx,1,0,0,1);
     vkvg_move_to(ctx,200,200);
     vkvg_line_to(ctx,400,200);
@@ -466,16 +468,15 @@ void vkvg_test_stroke(vkvg_context* ctx){
     vkvg_line_to(ctx,400,475);
     vkvg_stroke(ctx);
     vkvg_set_rgba(ctx,1,0,1,1);
-    vkvg_move_to(ctx,700,500);
+    vkvg_move_to(ctx,300,200);
 
-    vkvg_arc(ctx, 600,500,100,M_PI, 2.0*M_PI);
+    vkvg_arc(ctx, 200,200,100,0, M_PI);
     vkvg_stroke(ctx);
 
-
-    ctx->lineWidth = 20;
+    ctx->lineWidth = 2;
     vkvg_set_rgba(ctx,1,1,0,1);
-    vkvg_move_to(ctx,100,50);
-    vkvg_line_to(ctx,400,50);
+    vkvg_move_to(ctx,100,60);
+    vkvg_line_to(ctx,400,60);
     vkvg_stroke(ctx);
 }
 
@@ -501,9 +502,14 @@ int main(int argc, char *argv[]) {
 
     vkvg_context *ctx = vkvg_create(&surf);
 
-    vkvg_test_stroke(ctx);
-    vkvg_test_fill(ctx);
+    vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
 
+    vkvg_test_fill(ctx);
+    vkvg_test_stroke(ctx);
+
+    vkvg_move_to(ctx, 50,50);
+    vkvg_set_rgba(ctx,1,1,0,1);
+    vkvg_show_text (ctx,"Abracadabra {this} test is ô good");
 
     vkvg_destroy(ctx);
 

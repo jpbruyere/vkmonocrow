@@ -34,15 +34,20 @@ typedef struct vkvg_context_t {
 	float lineWidth;
 }vkvg_context;
 
-vkvg_context* vkvg_create (vkvg_surface* surf);
-void vkvg_destroy (vkvg_context* ctx);
+vkvg_context* vkvg_create	(vkvg_surface* surf);
+void vkvg_destroy			(vkvg_context* ctx);
 
-void vkvg_flush (vkvg_context* ctx);
+void vkvg_flush				(vkvg_context* ctx);
 
-void vkvg_close_path (vkvg_context* ctx);
-void vkvg_line_to (vkvg_context* ctx, float x, float y);
-void vkvg_move_to (vkvg_context* ctx, float x, float y);
-void vkvg_arc (vkvg_context* ctx, float xc, float yc, float radius, float a1, float a2);
-void vkvg_stroke (vkvg_context* ctx);
-void vkvg_set_rgba (vkvg_context* ctx, float r, float g, float b, float a);
+void vkvg_close_path		(vkvg_context* ctx);
+void vkvg_line_to			(vkvg_context* ctx, float x, float y);
+void vkvg_move_to			(vkvg_context* ctx, float x, float y);
+void vkvg_arc				(vkvg_context* ctx, float xc, float yc, float radius, float a1, float a2);
+void vkvg_stroke			(vkvg_context* ctx);
+void vkvg_fill				(vkvg_context* ctx);
+void vkvg_set_rgba			(vkvg_context* ctx, float r, float g, float b, float a);
+
+void vkvg_select_font_face	(vkvg_context* ctx, const char* name);
+void vkvg_set_font_size		(vkvg_context* ctx, uint32_t size);
+void vkvg_show_text			(vkvg_context* ctx, const char* text);
 #endif

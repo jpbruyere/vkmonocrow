@@ -2,21 +2,31 @@
 #define VKVG_DEVICE_H
 
 typedef struct vkvg_device_t{
-	VkDevice vkDev;
+	VkDevice				vkDev;
 	VkPhysicalDeviceMemoryProperties phyMemProps;
-	VkRenderPass renderPass;
+	VkRenderPass			renderPass;
 
-	VkQueue queue;
-	VkCommandPool cmdPool;
+	VkQueue					queue;
+	VkCommandPool			cmdPool;
 
-	VkPipeline pipeline;
-	VkPipeline pipelineWired;
-	VkPipeline pipelineLineList;
-	VkPipelineCache pipelineCache;
-	VkPipelineLayout pipelineLayout;
+	VkPipeline				pipeline;
+	VkPipeline				pipelineWired;
+	VkPipeline				pipelineLineList;
+	VkPipelineCache			pipelineCache;
+	VkPipelineLayout		pipelineLayout;
+	VkDescriptorPool		descriptorPool;
+	VkDescriptorSet			descriptorSet;
+	VkDescriptorSetLayout	descriptorSetLayout;
+
+	int		hdpi,
+			vdpi;
+
+	void*	fontCache;
+
 }vkvg_device;
 
-void vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPhysicalDeviceMemoryProperties memprops, vkvg_device* dev);
+void vkvg_device_create	(VkDevice vkdev, VkQueue queue, uint32_t qFam,
+						 VkPhysicalDeviceMemoryProperties memprops, vkvg_device* dev);
 void vkvg_device_destroy(vkvg_device* dev);
 
 #endif

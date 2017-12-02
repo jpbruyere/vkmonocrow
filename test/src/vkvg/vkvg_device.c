@@ -1,18 +1,30 @@
 #include "vkvg.h"
 #include "vkvg_internal.h"
+#include "vkvg_fonts.h"
 
 void _setupRenderPass(vkvg_device* dev);
 void _setupPipelines(vkvg_device* dev);
+void _createDescriptorSetLayout (vkvg_device* dev);
+void _createDescriptorSet (vkvg_device* dev);
 
 void vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPhysicalDeviceMemoryProperties memprops, vkvg_device* dev)
 {
+    dev->hdpi = 72;
+    dev->vdpi = 72;
+
     dev->vkDev = vkdev;
     dev->phyMemProps = memprops;
 
     dev->queue = queue;
     dev->cmdPool = vkh_cmd_pool_create (dev->vkDev, qFam, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
+    _init_fonts_cache(dev);
+
     _setupRenderPass (dev);
+
+    _createDescriptorSetLayout (dev);
+    _createDescriptorSet (dev);
+
     _setupPipelines (dev);
 }
 
@@ -22,6 +34,7 @@ void vkvg_device_destroy(vkvg_device* dev)
     vkDestroyPipelineLayout(dev->vkDev, dev->pipelineLayout, NULL);
     vkDestroyRenderPass (dev->vkDev, dev->renderPass, NULL);
     vkDestroyCommandPool (dev->vkDev, dev->cmdPool, NULL);
+    _destroy_font_cache(dev);
 }
 
 void _setupRenderPass(vkvg_device* dev)
@@ -160,10 +173,15 @@ void _setupPipelines(vkvg_device* dev)
         .pName = "main",
     };
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertStage,fragStage};
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    /*VkPipelineLayoutCreateInfo pipelineLayoutInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
                                                       .setLayoutCount = 0,
                                                       .pushConstantRangeCount = 0 };
-    VK_CHECK_RESULT(vkCreatePipelineLayout(dev->vkDev, &pipelineLayoutInfo, NULL, &dev->pipelineLayout));
+    VK_CHECK_RESULT(vkCreatePipelineLayout(dev->vkDev, &pipelineLayoutInfo, NULL, &dev->pipelineLayout));*/
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                                                            .setLayoutCount = 1,
+                                                            .pSetLayouts = &dev->descriptorSetLayout };
+    VK_CHECK_RESULT(vkCreatePipelineLayout(dev->vkDev, &pipelineLayoutCreateInfo, NULL, &dev->pipelineLayout));
+
     pipelineCreateInfo.stageCount = 2;
     pipelineCreateInfo.pStages = shaderStages;
     pipelineCreateInfo.pVertexInputState = &vertexInputState;
@@ -187,4 +205,45 @@ void _setupPipelines(vkvg_device* dev)
 
     vkDestroyShaderModule(dev->vkDev, shaderStages[0].module, NULL);
     vkDestroyShaderModule(dev->vkDev, shaderStages[1].module, NULL);
+}
+
+void _createDescriptorSetLayout (vkvg_device* dev) {
+
+    VkDescriptorSetLayoutBinding dsLayoutBinding = { .binding = 0,
+                                                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                                    .descriptorCount = 1,
+                                                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT };
+    VkDescriptorSetLayoutCreateInfo dsLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                                                          .bindingCount = 1,
+                                                          .pBindings = &dsLayoutBinding };
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(dev->vkDev, &dsLayoutCreateInfo, NULL, &dev->descriptorSetLayout));
+}
+
+void _createDescriptorSet (vkvg_device* dev) {
+    VkDescriptorPoolSize descriptorPoolSize = { .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                                .descriptorCount = 1 };
+    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                                                            .maxSets = 1,
+                                                            .poolSizeCount = 1,
+                                                            .pPoolSizes = &descriptorPoolSize };
+    VK_CHECK_RESULT(vkCreateDescriptorPool(dev->vkDev, &descriptorPoolCreateInfo, NULL, &dev->descriptorPool));
+
+    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                                                              .descriptorPool = dev->descriptorPool,
+                                                              .descriptorSetCount = 1,
+                                                              .pSetLayouts = &dev->descriptorSetLayout };
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &dev->descriptorSet));
+
+    _font_cache_t* cache = (_font_cache_t*)dev->fontCache;
+    VkDescriptorImageInfo descImgInfo = { .imageView = cache->cacheTex.pDescriptor->imageView,
+                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                          .sampler = cache->cacheTex.pDescriptor->sampler };
+
+    VkWriteDescriptorSet writeDescriptorSet = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                                .dstSet = dev->descriptorSet,
+                                                .dstBinding = 0,
+                                                .descriptorCount = 1,
+                                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                                .pImageInfo = &descImgInfo };
+    vkUpdateDescriptorSets(dev->vkDev, 1, &writeDescriptorSet, 0, NULL);
 }
