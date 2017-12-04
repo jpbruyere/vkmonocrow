@@ -4,6 +4,7 @@
 
 
 #include "vkvg_fonts.h"
+#include "vectors.h"
 
 #ifdef DEBUG
 static vec2 debugLinePoints[1000];
@@ -129,7 +130,7 @@ void vkvg_arc (VkvgContext ctx, float xc, float yc, float radius, float a1, floa
         ctx->pathes[ctx->pathPtr] = ctx->pointCount;
         _check_pathes_array(ctx);
         ctx->pathPtr++;
-        if (!_v2equ(v,ctx->curPos))
+        if (!vec2_equ(v,ctx->curPos))
             _add_curpos(ctx);
     }
 
@@ -151,7 +152,7 @@ void vkvg_arc (VkvgContext ctx, float xc, float yc, float radius, float a1, floa
     a = aa2;
     v.x = cos(a)*radius + xc;
     v.y = sin(a)*radius + yc;
-    if (!_v2equ (v,ctx->curPos))
+    if (!vec2_equ (v,ctx->curPos))
         _add_point(ctx,v.x,v.y);
 }
 
@@ -179,16 +180,16 @@ void _build_vb_step (vkvg_context* ctx, Vertex v, double hw, uint32_t iL, uint32
     _check_index_buff_size(ctx);
 
     double alpha = 0;
-    vec2d v0n = _v2LineNorm(ctx->points[iL], ctx->points[i]);
-    vec2d v1n = _v2LineNorm(ctx->points[i], ctx->points[iR]);
+    vec2 v0n = vec2_line_norm(ctx->points[iL], ctx->points[i]);
+    vec2 v1n = vec2_line_norm(ctx->points[i], ctx->points[iR]);
 
-    vec2d bisec = _v2addd(v0n,v1n);
-    bisec = _v2Normd(bisec);
+    vec2 bisec = vec2_add(v0n,v1n);
+    bisec = vec2_norm(bisec);
     alpha = acos(v0n.x*v1n.x+v0n.y*v1n.y)/2.0;
 
-    double lh = (double)hw / cos(alpha);
-    bisec = _v2dPerpd(bisec);
-    bisec = _v2Multd(bisec,lh);
+    float lh = (float)hw / cos(alpha);
+    bisec = vec2_perp(bisec);
+    bisec = vec2_mult(bisec,lh);
 
 #ifdef DEBUG
 
@@ -203,9 +204,9 @@ void _build_vb_step (vkvg_context* ctx, Vertex v, double hw, uint32_t iL, uint32
     dlpCount+=2;
 #endif
     uint32_t firstIdx = ctx->vertCount;
-    v.pos = vec2_add(ctx->points[i], _vec2dToVec2(bisec));
+    v.pos = vec2_add(ctx->points[i], bisec);
     _add_vertex(ctx, v);
-    v.pos = _v2sub(ctx->points[i], _vec2dToVec2(bisec));
+    v.pos = vec2_sub(ctx->points[i], bisec);
     _add_vertex(ctx, v);
     _add_tri_indices_for_rect(ctx, firstIdx);
 }
@@ -232,7 +233,7 @@ static inline float vec2_zcross (vec2 v1, vec2 v2){
     return v1.x*v2.y-v1.y*v2.x;
 }
 static inline float ecp_zcross (ear_clip_point* p0, ear_clip_point* p1, ear_clip_point* p2){
-    return vec2_zcross (_v2sub (p1->pos, p0->pos), _v2sub (p2->pos, p0->pos));
+    return vec2_zcross (vec2_sub (p1->pos, p0->pos), vec2_sub (p2->pos, p0->pos));
 }
 
 void vkvg_fill (VkvgContext ctx){
@@ -339,13 +340,13 @@ void vkvg_stroke (VkvgContext ctx)
             iL = lastPathPointIdx;
         }else{
             lastPathPointIdx = ctx->pathes[ptrPath+1];
-            vec2d bisec = _v2LineNorm(ctx->points[i], ctx->points[i+1]);
-            bisec = _v2dPerpd(bisec);
-            bisec = _v2Multd(bisec,hw);
+            vec2 bisec = vec2_line_norm(ctx->points[i], ctx->points[i+1]);
+            bisec = vec2_perp(bisec);
+            bisec = vec2_mult(bisec,hw);
 
-            v.pos = vec2_add(ctx->points[i], _vec2dToVec2(bisec));
+            v.pos = vec2_add(ctx->points[i], bisec);
             _add_vertex(ctx, v);
-            v.pos = _v2sub(ctx->points[i], _vec2dToVec2(bisec));
+            v.pos = vec2_sub(ctx->points[i], bisec);
             _add_vertex(ctx, v);
             _add_tri_indices_for_rect(ctx, firstIdx);
 
@@ -359,13 +360,13 @@ void vkvg_stroke (VkvgContext ctx)
         }
 
         if (!_path_is_closed(ctx,ptrPath)){
-            vec2d bisec = _v2LineNorm(ctx->points[i-1], ctx->points[i]);
-            bisec = _v2dPerpd(bisec);
-            bisec = _v2Multd(bisec,hw);
+            vec2 bisec = vec2_line_norm(ctx->points[i-1], ctx->points[i]);
+            bisec = vec2_perp(bisec);
+            bisec = vec2_mult(bisec,hw);
 
-            v.pos = vec2_add(ctx->points[i], _vec2dToVec2(bisec));
+            v.pos = vec2_add(ctx->points[i], bisec);
             _add_vertex(ctx, v);
-            v.pos = _v2sub(ctx->points[i], _vec2dToVec2(bisec));
+            v.pos = vec2_sub(ctx->points[i], bisec);
             _add_vertex(ctx, v);
 
             i++;

@@ -4,10 +4,11 @@
 #include "vkvg_device_internal.h"
 
 
-void _setupRenderPass(VkvgDevice dev);
-void _setupPipelines(VkvgDevice dev);
+void _create_pipeline_cache     (VkvgDevice dev);
+void _setupRenderPass           (VkvgDevice dev);
+void _setupPipelines            (VkvgDevice dev);
 void _createDescriptorSetLayout (VkvgDevice dev);
-void _createDescriptorSet (VkvgDevice dev);
+void _createDescriptorSet       (VkvgDevice dev);
 
 VkvgDevice vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPhysicalDeviceMemoryProperties memprops)
 {
@@ -21,6 +22,8 @@ VkvgDevice vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPh
 
     dev->queue = queue;
     dev->cmdPool = vkh_cmd_pool_create (dev->vkDev, qFam, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+    _create_pipeline_cache(dev);
 
     _init_fonts_cache(dev);
 
@@ -43,6 +46,10 @@ void vkvg_device_destroy(VkvgDevice dev)
     free(dev);
 }
 
+void _create_pipeline_cache(VkvgDevice dev){
+    VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+    VK_CHECK_RESULT(vkCreatePipelineCache(dev->vkDev, &pipelineCacheCreateInfo, NULL, &dev->pipelineCache));
+}
 void _setupRenderPass(VkvgDevice dev)
 {
     VkAttachmentDescription resolveAttachment = {
@@ -189,15 +196,15 @@ void _setupPipelines(VkvgDevice dev)
     pipelineCreateInfo.pDynamicState = &dynamicState;
     pipelineCreateInfo.layout = dev->pipelineLayout;
 
-    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &dev->pipeline));
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, dev->pipelineCache, 1, &pipelineCreateInfo, NULL, &dev->pipeline));
 
     inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     rasterizationState.polygonMode = VK_POLYGON_MODE_LINE;
-    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &dev->pipelineWired));
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, dev->pipelineCache, 1, &pipelineCreateInfo, NULL, &dev->pipelineWired));
 
     rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
     inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &dev->pipelineLineList));
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, dev->pipelineCache, 1, &pipelineCreateInfo, NULL, &dev->pipelineLineList));
 
     vkDestroyShaderModule(dev->vkDev, shaderStages[0].module, NULL);
     vkDestroyShaderModule(dev->vkDev, shaderStages[1].module, NULL);

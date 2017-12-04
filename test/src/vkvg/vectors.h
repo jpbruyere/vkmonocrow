@@ -39,21 +39,22 @@ typedef struct {
 	uint16_t y;
 }vec2i16;
 
-vec2d		_v2LineNorm	(vec2 a, vec2 b);
-double		_v2Lengthd	(vec2d v);
-float		_v2Length	(vec2 v);
-vec2d		_v2Normd	(vec2d a);
-vec2d		_v2Multd	(vec2d a, double m);
-
-vec2d		 _v2LineNormd(vec2d a, vec2d b);
-vec2d		_v2dPerpd	(vec2d a);
-vec2d		_v2perpNorm	(vec2 a, vec2 b);
-vec2		_vec2dToVec2(vec2d vd);
-vec2		_v2perpNorm2(vec2 a, vec2 b);
+float		vec2_length	(vec2 v);
+vec2		vec2_norm	(vec2 a);
+vec2		vec2_perp	(vec2 a);
 vec2		vec2_add	(vec2 a, vec2 b);
-vec2d		_v2addd		(vec2d a, vec2d b);
-vec2		_v2sub		(vec2 a, vec2 b);
-vec2d		_v2subd		(vec2d a, vec2d b);
-bool		_v2equ		(vec2 a, vec2 b);
+vec2		vec2_sub	(vec2 a, vec2 b);
+vec2		vec2_mult	(vec2 a, float m);
+bool		vec2_equ	(vec2 a, vec2 b);
+vec2		vec2_line_norm	(vec2 a, vec2 b);
 
+double		vec2d_length(vec2d v);
+vec2d		vec2d_norm	(vec2d a);
+vec2d		vec2d_perp	(vec2d a);
+vec2d		vec2d_add	(vec2d a, vec2d b);
+vec2d		vec2d_sub	(vec2d a, vec2d b);
+vec2d		vec2d_mult	(vec2d a, double m);
+vec2d		vec2d_line_norm(vec2d a, vec2d b);
+
+vec2		vec2d_to_vec2(vec2d vd);
 #endif
