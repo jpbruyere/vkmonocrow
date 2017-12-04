@@ -1,12 +1,46 @@
 #ifndef VKVG_CONTEXT_INTERNAL_H
 #define VKVG_CONTEXT_INTERNAL_H
 
-#include "vkvg_context.h"
+#include "vkvg.h"
 #include "vkvg_internal.h"
+#include "vkvg_buff.h"
 
 #define VKVG_BUFF_SIZE				256
 #define VKVG_PATHES_SIZE			16
 #define VKVG_ARRAY_THRESHOLD		16
+
+typedef struct _vkvg_context_t {
+	VkvgSurface		pSurf;
+	VkCommandBuffer cmd;
+	VkFence			flushFence;
+
+	//vk buffers, holds data until flush
+	vkvg_buff	indices;
+	size_t		sizeIndices;
+	uint32_t	indCount;
+
+	uint32_t	fillIndCount;
+
+	vkvg_buff	vertices;
+	size_t		sizeVertices;
+	uint32_t	vertCount;
+
+	//pathes, exists until stroke of fill
+	vec2*		points;
+	size_t		sizePoints;
+	uint32_t	pointCount;
+	uint32_t	totalPoints;
+	uint32_t	pathPtr;
+	uint32_t*	pathes;
+	size_t		sizePathes;
+
+	vec2		curPos;
+	vec4		curRGBA;
+	float		lineWidth;
+
+	void*		curFont;
+	VkvgDirection textDirection;
+}vkvg_context;
 
 void _check_pathes_array	(vkvg_context* ctx);
 void _check_point_array		(vkvg_context* ctx);

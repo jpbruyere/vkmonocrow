@@ -1,5 +1,8 @@
-#include "vkvg.h"
+#include "vkvg_device_internal.h"
 #include "vkvg_context_internal.h"
+#include "vkvg_surface_internal.h"
+
+
 #include "vkvg_fonts.h"
 
 #ifdef DEBUG
@@ -7,9 +10,9 @@ static vec2 debugLinePoints[1000];
 static uint32_t dlpCount = 0;
 #endif
 
-vkvg_context* vkvg_create (vkvg_surface* surf)
+VkvgContext vkvg_create(VkvgSurface surf)
 {
-    vkvg_context* ctx = (vkvg_context*)malloc(sizeof(vkvg_context));
+    VkvgContext ctx = (vkvg_context*)malloc(sizeof(vkvg_context));
 
     ctx->sizeVertices = ctx->sizePoints = VKVG_BUFF_SIZE;
     ctx->sizeIndices = VKVG_BUFF_SIZE * 2;
@@ -30,7 +33,7 @@ vkvg_context* vkvg_create (vkvg_surface* surf)
 
     return ctx;
 }
-void vkvg_flush (vkvg_context* ctx){
+void vkvg_flush (VkvgContext ctx){
     if (ctx->indCount == 0)
         return;
     ctx->fillIndCount = ctx->indCount;
@@ -58,7 +61,7 @@ void vkvg_flush (vkvg_context* ctx){
     _flush_cmd_buff(ctx);
 }
 
-void vkvg_destroy (vkvg_context* ctx)
+void vkvg_destroy (VkvgContext ctx)
 {
     vkvg_flush(ctx);
 
@@ -74,7 +77,7 @@ void vkvg_destroy (vkvg_context* ctx)
 }
 
 
-void vkvg_close_path (vkvg_context* ctx){
+void vkvg_close_path (VkvgContext ctx){
     if (ctx->pathPtr % 2 == 0)//current path is empty
         return;
     //check if at least 3 points are present
@@ -87,7 +90,7 @@ void vkvg_close_path (vkvg_context* ctx){
     }
 }
 
-void vkvg_line_to (vkvg_context* ctx, float x, float y)
+void vkvg_line_to (VkvgContext ctx, float x, float y)
 {
     if (ctx->pathPtr % 2 == 0){//current path is empty
         //set start to current idx in point array
@@ -108,7 +111,7 @@ float _normalizeAngle(float a)
     else
         return res;
 }
-void vkvg_arc (vkvg_context* ctx, float xc, float yc, float radius, float a1, float a2){
+void vkvg_arc (VkvgContext ctx, float xc, float yc, float radius, float a1, float a2){
     float aDiff = a2 - a1;
     float aa1, aa2;
     float step = M_PI/radius;
@@ -152,7 +155,7 @@ void vkvg_arc (vkvg_context* ctx, float xc, float yc, float radius, float a1, fl
         _add_point(ctx,v.x,v.y);
 }
 
-void vkvg_move_to (vkvg_context* ctx, float x, float y)
+void vkvg_move_to (VkvgContext ctx, float x, float y)
 {
     _finish_path(ctx);
 
@@ -232,7 +235,7 @@ static inline float ecp_zcross (ear_clip_point* p0, ear_clip_point* p1, ear_clip
     return vec2_zcross (_v2sub (p1->pos, p0->pos), _v2sub (p2->pos, p0->pos));
 }
 
-void vkvg_fill (vkvg_context* ctx){
+void vkvg_fill (VkvgContext ctx){
 
     if (ctx->pathPtr == 0)//nothing to stroke
         return;
@@ -311,7 +314,7 @@ void vkvg_fill (vkvg_context* ctx){
     _clear_path(ctx);
 }
 
-void vkvg_stroke (vkvg_context* ctx)
+void vkvg_stroke (VkvgContext ctx)
 {
     _finish_path(ctx);
 
@@ -384,22 +387,30 @@ void vkvg_stroke (vkvg_context* ctx)
     _clear_path(ctx);
 }
 
-void vkvg_set_rgba (vkvg_context* ctx, float r, float g, float b, float a)
+void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
 {
     ctx->curRGBA.x = r;
     ctx->curRGBA.y = g;
     ctx->curRGBA.z = b;
     ctx->curRGBA.w = a;
 }
+void vkvg_set_linewidth (VkvgContext ctx, float width){
+    ctx->lineWidth = width;
+}
 
 
-void vkvg_select_font_face (vkvg_context* ctx, const char* name){
+void vkvg_select_font_face (VkvgContext ctx, const char* name){
 
     _select_font_face (ctx, name);
 }
-void vkvg_set_font_size (vkvg_context* ctx, uint32_t size){
+
+void vkvg_set_text_direction (vkvg_context* ctx, VkvgDirection direction){
 
 }
-void vkvg_show_text (vkvg_context* ctx, const char* text){
+
+void vkvg_set_font_size (VkvgContext ctx, uint32_t size){
+
+}
+void vkvg_show_text (VkvgContext ctx, const char* text){
     _show_text(ctx,text);
 }

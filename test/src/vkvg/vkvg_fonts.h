@@ -10,10 +10,11 @@
 #include <hb.h>
 #include <hb-ft.h>
 
-#define FONT_PAGE_SIZE 2048
-#define FONT_CACHE_INIT_LAYERS  4
+#define FONT_PAGE_SIZE 4096
+#define FONT_CACHE_INIT_LAYERS  8
 
 #include "vkvg.h"
+#include "vkh_image.h"
 
 typedef struct {
 	vec4    bounds;
@@ -22,18 +23,23 @@ typedef struct {
 }_char_ref;
 
 typedef struct {
-	uint8_t*    curPage;
-	uint8_t     curPageIdx;
-	FT_Library  library;
 	hb_font_t*  hb_font;
 	FT_Face     face;
-	vkh_image   cacheTex;
-	VkFence     uploadFence;
-	_char_ref*  charLookup[0xFFFF];
+	_char_ref** charLookup;
+}_vkvg_font_t;
+
+typedef struct {
+	uint8_t*		curPage;	//current page data
+	uint8_t			curPageIdx;	//current page index in VkImage array
+	FT_Library		library;
+	vkh_image		cacheTex;	//tex 2d array
+	VkFence			uploadFence;
+	_vkvg_font_t*	fonts;
+	uint8_t			fontsCount;
 }_font_cache_t;
 
-void _init_fonts_cache		(vkvg_device* dev);
-void _destroy_font_cache	(vkvg_device* dev);
-void _select_font_face		(vkvg_context* ctx, const char* name);
-void _show_text				(vkvg_context* ctx, const char* text);
+void _init_fonts_cache		(VkvgDevice dev);
+void _destroy_font_cache	(VkvgDevice dev);
+void _select_font_face		(VkvgContext ctx, const char* name);
+void _show_text				(VkvgContext ctx, const char* text);
 #endif

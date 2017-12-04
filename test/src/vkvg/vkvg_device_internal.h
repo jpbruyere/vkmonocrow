@@ -1,7 +1,9 @@
-#ifndef VKVG_DEVICE_H
-#define VKVG_DEVICE_H
+#ifndef VKVG_DEVICE_INTERNAL_H
+#define VKVG_DEVICE_INTERNAL_H
 
-typedef struct vkvg_device_t{
+#include "vkvg.h"
+
+typedef struct _vkvg_device_t{
 	VkDevice				vkDev;
 	VkPhysicalDeviceMemoryProperties phyMemProps;
 	VkRenderPass			renderPass;
@@ -24,9 +26,4 @@ typedef struct vkvg_device_t{
 	void*	fontCache;
 
 }vkvg_device;
-
-void vkvg_device_create	(VkDevice vkdev, VkQueue queue, uint32_t qFam,
-						 VkPhysicalDeviceMemoryProperties memprops, vkvg_device* dev);
-void vkvg_device_destroy(vkvg_device* dev);
-
 #endif

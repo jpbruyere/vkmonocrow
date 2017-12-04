@@ -1,14 +1,18 @@
 #include "vkvg.h"
 #include "vkvg_internal.h"
 #include "vkvg_fonts.h"
+#include "vkvg_device_internal.h"
 
-void _setupRenderPass(vkvg_device* dev);
-void _setupPipelines(vkvg_device* dev);
-void _createDescriptorSetLayout (vkvg_device* dev);
-void _createDescriptorSet (vkvg_device* dev);
 
-void vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPhysicalDeviceMemoryProperties memprops, vkvg_device* dev)
+void _setupRenderPass(VkvgDevice dev);
+void _setupPipelines(VkvgDevice dev);
+void _createDescriptorSetLayout (VkvgDevice dev);
+void _createDescriptorSet (VkvgDevice dev);
+
+VkvgDevice vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPhysicalDeviceMemoryProperties memprops)
 {
+    VkvgDevice dev = (vkvg_device*)malloc(sizeof(vkvg_device));
+
     dev->hdpi = 72;
     dev->vdpi = 72;
 
@@ -26,18 +30,20 @@ void vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPhysical
     _createDescriptorSet (dev);
 
     _setupPipelines (dev);
+    return dev;
 }
 
-void vkvg_device_destroy(vkvg_device* dev)
+void vkvg_device_destroy(VkvgDevice dev)
 {
     vkDestroyPipeline (dev->vkDev, dev->pipeline, NULL);
     vkDestroyPipelineLayout(dev->vkDev, dev->pipelineLayout, NULL);
     vkDestroyRenderPass (dev->vkDev, dev->renderPass, NULL);
     vkDestroyCommandPool (dev->vkDev, dev->cmdPool, NULL);
     _destroy_font_cache(dev);
+    free(dev);
 }
 
-void _setupRenderPass(vkvg_device* dev)
+void _setupRenderPass(VkvgDevice dev)
 {
     VkAttachmentDescription resolveAttachment = {
                     .format = FB_COLOR_FORMAT,
@@ -96,7 +102,7 @@ void _setupRenderPass(vkvg_device* dev)
     VK_CHECK_RESULT(vkCreateRenderPass(dev->vkDev, &renderPassInfo, NULL, &dev->renderPass));
 }
 
-void _setupPipelines(vkvg_device* dev)
+void _setupPipelines(VkvgDevice dev)
 {
     VkGraphicsPipelineCreateInfo pipelineCreateInfo = { .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 .renderPass = dev->renderPass };
@@ -114,7 +120,14 @@ void _setupPipelines(vkvg_device* dev)
                 .lineWidth = 1.0f };
 
     VkPipelineColorBlendAttachmentState blendAttachmentState =
-    { .colorWriteMask = 0xf, .blendEnable = VK_FALSE };
+    { .colorWriteMask = 0xf, .blendEnable = VK_TRUE,
+      .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+      .dstColorBlendFactor= VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+      .colorBlendOp = VK_BLEND_OP_ADD,
+      .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+      .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+      .alphaBlendOp = VK_BLEND_OP_ADD,
+    };
 
     VkPipelineColorBlendStateCreateInfo colorBlendState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                 .attachmentCount = 1,
@@ -141,46 +154,29 @@ void _setupPipelines(vkvg_device* dev)
                 .stride = sizeof(Vertex),
                 .inputRate = VK_VERTEX_INPUT_RATE_VERTEX };
 
-    VkVertexInputAttributeDescription vertexInputAttributs[3];
-    vertexInputAttributs[0].binding = 0;//pos
-    vertexInputAttributs[0].location = 0;
-    vertexInputAttributs[0].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexInputAttributs[0].offset = 0;
-    vertexInputAttributs[1].binding = 0;//color
-    vertexInputAttributs[1].location = 1;
-    vertexInputAttributs[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    vertexInputAttributs[1].offset = sizeof(vec2);
-    vertexInputAttributs[2].binding = 0;//uv
-    vertexInputAttributs[2].location = 2;
-    vertexInputAttributs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-    vertexInputAttributs[2].offset = sizeof(vec2) + sizeof(vec4);
+    VkVertexInputAttributeDescription vertexInputAttributs[3] = {
+        {0, 0, VK_FORMAT_R32G32_SFLOAT,         0},
+        {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT,   sizeof(vec2)},
+        {2, 0, VK_FORMAT_R32G32B32_SFLOAT,      sizeof(vec2) + sizeof(vec4)}
+    };
 
     VkPipelineVertexInputStateCreateInfo vertexInputState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                                                              .vertexBindingDescriptionCount = 1,
-                                                              .pVertexBindingDescriptions = &vertexInputBinding,
-                                                              .vertexAttributeDescriptionCount = 3,
-                                                              .pVertexAttributeDescriptions = vertexInputAttributs };
-    VkPipelineShaderStageCreateInfo vertStage = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &vertexInputBinding,
+        .vertexAttributeDescriptionCount = 3,
+        .pVertexAttributeDescriptions = vertexInputAttributs };
+
+    VkPipelineShaderStageCreateInfo vertStage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
         .module = vkh_load_module(dev->vkDev, "shaders/triangle.vert.spv"),
         .pName = "main",
     };
-    VkPipelineShaderStageCreateInfo fragStage = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    VkPipelineShaderStageCreateInfo fragStage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
         .module = vkh_load_module(dev->vkDev, "shaders/triangle.frag.spv"),
         .pName = "main",
     };
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertStage,fragStage};
-    /*VkPipelineLayoutCreateInfo pipelineLayoutInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                                                      .setLayoutCount = 0,
-                                                      .pushConstantRangeCount = 0 };
-    VK_CHECK_RESULT(vkCreatePipelineLayout(dev->vkDev, &pipelineLayoutInfo, NULL, &dev->pipelineLayout));*/
-    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                                                            .setLayoutCount = 1,
-                                                            .pSetLayouts = &dev->descriptorSetLayout };
-    VK_CHECK_RESULT(vkCreatePipelineLayout(dev->vkDev, &pipelineLayoutCreateInfo, NULL, &dev->pipelineLayout));
 
     pipelineCreateInfo.stageCount = 2;
     pipelineCreateInfo.pStages = shaderStages;
@@ -207,7 +203,7 @@ void _setupPipelines(vkvg_device* dev)
     vkDestroyShaderModule(dev->vkDev, shaderStages[1].module, NULL);
 }
 
-void _createDescriptorSetLayout (vkvg_device* dev) {
+void _createDescriptorSetLayout (VkvgDevice dev) {
 
     VkDescriptorSetLayoutBinding dsLayoutBinding = { .binding = 0,
                                                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -217,9 +213,14 @@ void _createDescriptorSetLayout (vkvg_device* dev) {
                                                           .bindingCount = 1,
                                                           .pBindings = &dsLayoutBinding };
     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(dev->vkDev, &dsLayoutCreateInfo, NULL, &dev->descriptorSetLayout));
+
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                                                            .setLayoutCount = 1,
+                                                            .pSetLayouts = &dev->descriptorSetLayout };
+    VK_CHECK_RESULT(vkCreatePipelineLayout(dev->vkDev, &pipelineLayoutCreateInfo, NULL, &dev->pipelineLayout));
 }
 
-void _createDescriptorSet (vkvg_device* dev) {
+void _createDescriptorSet (VkvgDevice dev) {
     VkDescriptorPoolSize descriptorPoolSize = { .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                                                 .descriptorCount = 1 };
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,

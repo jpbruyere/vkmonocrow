@@ -1,4 +1,7 @@
+#include "vkvg_surface_internal.h"
 #include "vkvg_context_internal.h"
+#include "vkvg_device_internal.h"
+
 
 void _check_pathes_array (vkvg_context* ctx){
     if (ctx->sizePathes - ctx->pathPtr > VKVG_ARRAY_THRESHOLD)

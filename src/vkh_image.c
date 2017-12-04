@@ -56,7 +56,8 @@ void vkh_image_ms_create (vkh_device *pDev,
     _vkh_image_create (pDev, VK_IMAGE_TYPE_2D, format, width, height, memprops,usage,
                       num_samples, VK_IMAGE_TILING_OPTIMAL, 1, 1, layout, img);
 }
-void vkh_image_create_descriptor(vkh_image* img, VkImageViewType viewType)
+void vkh_image_create_descriptor(vkh_image* img, VkImageViewType viewType, VkFilter magFilter,
+                                 VkFilter minFilter, VkSamplerMipmapMode mipmapMode)
 {
     img->pDescriptor = (VkDescriptorImageInfo*)malloc(sizeof(VkDescriptorImageInfo));
     img->pDescriptor->imageLayout = img->infos.initialLayout;
@@ -70,9 +71,9 @@ void vkh_image_create_descriptor(vkh_image* img, VkImageViewType viewType)
 
     VkSamplerCreateInfo samplerCreateInfo = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
                                               .maxAnisotropy = 1.0,
-                                              .magFilter = VK_FILTER_LINEAR,
-                                              .minFilter = VK_FILTER_LINEAR,
-                                              .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR};
+                                              .magFilter = magFilter,
+                                              .minFilter = minFilter,
+                                              .mipmapMode = mipmapMode};
     VK_CHECK_RESULT(vkCreateSampler(img->pDev->vkDev, &samplerCreateInfo, NULL, &img->pDescriptor->sampler));
 
 }

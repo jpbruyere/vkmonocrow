@@ -15,13 +15,13 @@ typedef struct{
 }Vertex;
 
 
-vkvg_device device = {};
+
 vkh_buffer vertices = {};
 vkh_buffer indices = {};
 uint32_t indicesCount = 0;
 
-vkvg_surface surf = {};
-
+VkvgDevice device;
+VkvgSurface surf = NULL;
 
 VkPipeline pipeline;
 VkPipelineCache pipelineCache;
@@ -363,7 +363,7 @@ void buildCommandBuffers(vkh_presenter* r){
     for (int32_t i = 0; i < r->imgCount; ++i)
     {
         VkImage bltDstImage = r->ScBuffers[i].image;
-        VkImage bltSrcImage = surf.img.image;
+        VkImage bltSrcImage = vkvg_surface_get_vk_image(surf);
 
         VkCommandBuffer cb = r->cmdBuffs[i];
         vkh_cmd_begin(cb,VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
@@ -437,17 +437,17 @@ void draw(VkEngine* e) {
         VK_CHECK_RESULT(vkQueuePresentKHR(r->queue, &present));
     }
 }
-void vkvg_test_fill(vkvg_context* ctx){
-    vkvg_set_rgba(ctx,0,1,0,1);
-    vkvg_move_to(ctx,900,700);
-    vkvg_line_to(ctx,950,750);
-    vkvg_line_to(ctx,900,800);
+void vkvg_test_fill(VkvgContext ctx){
+    vkvg_set_rgba(ctx,0.1,0.1,0.8,0.4);
+    vkvg_move_to(ctx,100,100);
+    vkvg_line_to(ctx,950,550);
+    vkvg_line_to(ctx,100,800);
     vkvg_close_path(ctx);
     vkvg_fill(ctx);
 }
 
-void vkvg_test_stroke(vkvg_context* ctx){
-    ctx->lineWidth = 5;
+void vkvg_test_stroke(VkvgContext ctx){
+    vkvg_set_linewidth(ctx, 50);
     vkvg_set_rgba(ctx,1,0,0,1);
     vkvg_move_to(ctx,200,200);
     vkvg_line_to(ctx,400,200);
@@ -462,21 +462,20 @@ void vkvg_test_stroke(vkvg_context* ctx){
     vkvg_line_to(ctx,300,500);
     vkvg_close_path(ctx);
     vkvg_stroke(ctx);
-    ctx->lineWidth = 10;
-    vkvg_set_rgba(ctx,0.5,0.6,1,1);
+    vkvg_set_linewidth(ctx, 40);
+    vkvg_set_rgba(ctx,0.5,0.6,1,1.0);
     vkvg_move_to(ctx,700,475);
     vkvg_line_to(ctx,400,475);
     vkvg_stroke(ctx);
-    vkvg_set_rgba(ctx,1,0,1,1);
+    vkvg_set_rgba(ctx,0,0.5,0.5,0.5);
     vkvg_move_to(ctx,300,200);
-
     vkvg_arc(ctx, 200,200,100,0, M_PI);
     vkvg_stroke(ctx);
 
-    ctx->lineWidth = 2;
-    vkvg_set_rgba(ctx,1,1,0,1);
+    vkvg_set_linewidth(ctx, 20);
+    vkvg_set_rgba(ctx,0.1,0.1,0.1,0.5);
     vkvg_move_to(ctx,100,60);
-    vkvg_line_to(ctx,400,60);
+    vkvg_line_to(ctx,400,600);
     vkvg_stroke(ctx);
 }
 
@@ -489,10 +488,8 @@ int main(int argc, char *argv[]) {
 
     EngineInit(&e);
 
-    vkvg_device_create(e.dev, e.renderer.queue, e.renderer.qFam, e.memory_properties, &device);
-
-
-    vkvg_surface_create (&device,1024,800,&surf);
+    device = vkvg_device_create(e.dev, e.renderer.queue, e.renderer.qFam, e.memory_properties);
+    surf = vkvg_surface_create (device,1024,800);
 
     vkeCheckPhyPropBlitSource (&e);
     glfwSetKeyCallback(e.renderer.window, key_callback);
@@ -500,16 +497,30 @@ int main(int argc, char *argv[]) {
     vke_swapchain_create(&e);
 
 
-    vkvg_context *ctx = vkvg_create(&surf);
+    VkvgContext ctx = vkvg_create(surf);
 
-    vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
+    vkvg_select_font_face(ctx, "/usr/local/share/fonts/DroidSansMono.ttf");
+    //vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/unifont/unifont.ttf");
+
+    vkvg_move_to(ctx, 50,50);
+    vkvg_set_rgba(ctx,0.7,0.7,0.7,1);
+    vkvg_show_text (ctx,"Abracadabra {this} test is ô good");
 
     vkvg_test_fill(ctx);
     vkvg_test_stroke(ctx);
 
-    vkvg_move_to(ctx, 50,50);
-    vkvg_set_rgba(ctx,1,1,0,1);
-    vkvg_show_text (ctx,"Abracadabra {this} test is ô good");
+
+
+    /*vkvg_move_to(ctx, 150,150);
+    vkvg_show_text (ctx,"test string é€");
+    vkvg_move_to(ctx, 150,200);
+    vkvg_show_text (ctx,"كسول الزنجبيل القط");
+    vkvg_move_to(ctx, 150,250);
+    vkvg_show_text (ctx,"懶惰的姜貓");*/
+    vkvg_set_rgba(ctx,0.7,0.7,0.9,1);
+    vkvg_move_to(ctx, 80,400);
+    vkvg_show_text (ctx,"Ленивый рыжий кот");
+
 
     vkvg_destroy(ctx);
 
@@ -523,8 +534,8 @@ int main(int argc, char *argv[]) {
     vkDeviceWaitIdle(e.dev);
     vke_swapchain_destroy(&e.renderer);
 
-    vkvg_surface_destroy(&surf);
-    vkvg_device_destroy(&device);
+    vkvg_surface_destroy(surf);
+    vkvg_device_destroy(device);
 
     EngineTerminate (&e);
 

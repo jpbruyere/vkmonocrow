@@ -12,9 +12,8 @@ layout (location = 0) out vec4 outFragColor;
 
 void main()
 {
-	vec4 c = vec4(inColor.rgb, 1.0);
+	vec4 c = inColor;
 	if (inUV.z >= 0.0)
 		c *= texture(fontMap, inUV).r;
-	//c.r+=0.5;
 	outFragColor = c;
 }
