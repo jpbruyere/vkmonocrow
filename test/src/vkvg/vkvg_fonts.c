@@ -22,7 +22,7 @@ void _init_fonts_cache (VkvgDevice dev){
                             FONT_CACHE_INIT_LAYERS,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                             VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                             &cache->cacheTex);
-    vkh_image_create_descriptor (&cache->cacheTex, VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+    vkh_image_create_descriptor (&cache->cacheTex, VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT,
                                  VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
 
     cache->uploadFence = vkh_fence_create(dev->vkDev);

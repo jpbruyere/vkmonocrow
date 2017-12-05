@@ -52,7 +52,7 @@ void _create_pipeline_cache(VkvgDevice dev){
 }
 void _setupRenderPass(VkvgDevice dev)
 {
-    VkAttachmentDescription resolveAttachment = {
+    VkAttachmentDescription attColor = {
                     .format = FB_COLOR_FORMAT,
                     .samples = VKVG_SAMPLES,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
@@ -60,7 +60,7 @@ void _setupRenderPass(VkvgDevice dev)
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                     .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-    VkAttachmentDescription attachment = {
+    VkAttachmentDescription attColorResolve = {
                     .format = FB_COLOR_FORMAT,
                     .samples = VK_SAMPLE_COUNT_1_BIT,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
@@ -69,17 +69,41 @@ void _setupRenderPass(VkvgDevice dev)
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                     .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL };
-    VkAttachmentDescription attachments[] = {resolveAttachment,attachment};
-    VkAttachmentReference colorReference = {
+    VkAttachmentDescription attDS = {
+                    .format = VK_FORMAT_S8_UINT,
+                    .samples = VKVG_SAMPLES,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+    VkAttachmentDescription attDSResolve = {
+                    .format = VK_FORMAT_S8_UINT,
+                    .samples = VK_SAMPLE_COUNT_1_BIT,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+    VkAttachmentDescription attachments[] = {attColor,attColorResolve,attDS,attDSResolve};
+    VkAttachmentReference colorRef = {
         .attachment = 0,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-    VkAttachmentReference resolveReference = {
+    VkAttachmentReference colorResolveRef = {
         .attachment = 1,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+    VkAttachmentReference dsRef = {
+        .attachment = 2,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+    /*VkAttachmentReference dsResolveRef = {
+        .attachment = 3,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };*/
     VkSubpassDescription subpassDescription = { .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
                         .colorAttachmentCount = 1,
-                        .pColorAttachments = &colorReference,
-                        .pResolveAttachments = & resolveReference };
+                        .pColorAttachments = &colorRef,
+                        .pResolveAttachments = &colorResolveRef,
+                        .pDepthStencilAttachment = &dsRef};
     VkSubpassDependency dep0 = {
         .srcSubpass = VK_SUBPASS_EXTERNAL,
         .dstSubpass = 0,
@@ -99,7 +123,7 @@ void _setupRenderPass(VkvgDevice dev)
 
     VkSubpassDependency dependencies[] = {dep0,dep1};
     VkRenderPassCreateInfo renderPassInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                .attachmentCount = 2,
+                .attachmentCount = 4,
                 .pAttachments = attachments,
                 .subpassCount = 1,
                 .pSubpasses = &subpassDescription,
@@ -139,6 +163,14 @@ void _setupPipelines(VkvgDevice dev)
     VkPipelineColorBlendStateCreateInfo colorBlendState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                 .attachmentCount = 1,
                 .pAttachments = &blendAttachmentState };
+
+    VkPipelineDepthStencilStateCreateInfo dsStateCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+                .depthTestEnable = VK_FALSE,
+                .depthWriteEnable = VK_FALSE,
+                .depthCompareOp = VK_COMPARE_OP_ALWAYS,
+                .stencilTestEnable = VK_FALSE,
+                .front = {},
+                .back = {} };
 
     VkDynamicState dynamicStateEnables[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
@@ -193,6 +225,7 @@ void _setupPipelines(VkvgDevice dev)
     pipelineCreateInfo.pRasterizationState = &rasterizationState;
     pipelineCreateInfo.pMultisampleState = &multisampleState;
     pipelineCreateInfo.pColorBlendState = &colorBlendState;
+    pipelineCreateInfo.pDepthStencilState = &dsStateCreateInfo;
     pipelineCreateInfo.pDynamicState = &dynamicState;
     pipelineCreateInfo.layout = dev->pipelineLayout;
 

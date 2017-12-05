@@ -42,12 +42,12 @@ void vkh_tex2d_array_create (vkh_device *pDev,
 }
 
 void vkh_image_create (vkh_device *pDev,
-                           VkFormat format, uint32_t width, uint32_t height,
+                           VkFormat format, uint32_t width, uint32_t height, VkImageTiling tiling,
                            VkMemoryPropertyFlags memprops,
                            VkImageUsageFlags usage, VkImageLayout layout, vkh_image* img)
 {
     _vkh_image_create (pDev, VK_IMAGE_TYPE_2D, format, width, height, memprops,usage,
-                      VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_LINEAR, 1, 1, layout, img);
+                      VK_SAMPLE_COUNT_1_BIT, tiling, 1, 1, layout, img);
 }
 void vkh_image_ms_create (vkh_device *pDev,
                            VkFormat format, VkSampleCountFlagBits num_samples, uint32_t width, uint32_t height,
@@ -56,7 +56,7 @@ void vkh_image_ms_create (vkh_device *pDev,
     _vkh_image_create (pDev, VK_IMAGE_TYPE_2D, format, width, height, memprops,usage,
                       num_samples, VK_IMAGE_TILING_OPTIMAL, 1, 1, layout, img);
 }
-void vkh_image_create_descriptor(vkh_image* img, VkImageViewType viewType, VkFilter magFilter,
+void vkh_image_create_descriptor(vkh_image* img, VkImageViewType viewType, VkImageAspectFlags aspectFlags, VkFilter magFilter,
                                  VkFilter minFilter, VkSamplerMipmapMode mipmapMode)
 {
     img->pDescriptor = (VkDescriptorImageInfo*)malloc(sizeof(VkDescriptorImageInfo));
@@ -66,7 +66,7 @@ void vkh_image_create_descriptor(vkh_image* img, VkImageViewType viewType, VkFil
                                          .viewType = viewType,
                                          .format = img->infos.format,
                                          .components = {VK_COMPONENT_SWIZZLE_R,VK_COMPONENT_SWIZZLE_G,VK_COMPONENT_SWIZZLE_B,VK_COMPONENT_SWIZZLE_A},
-                                         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,img->infos.arrayLayers}};
+                                         .subresourceRange = {aspectFlags,0,1,0,img->infos.arrayLayers}};
     VK_CHECK_RESULT(vkCreateImageView(img->pDev->vkDev, &viewInfo, NULL, &img->pDescriptor->imageView));
 
     VkSamplerCreateInfo samplerCreateInfo = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,

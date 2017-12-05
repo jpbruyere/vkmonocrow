@@ -211,6 +211,31 @@ void EngineInit (VkEngine* e) {
                                              NULL,&imgProps );*/
 
     printf("max samples = %d\n", getMaxUsableSampleCount(e->gpu_props.limits.framebufferColorSampleCounts));
+    printf("max tex2d size = %d\n", e->gpu_props.limits.maxImageDimension2D);
+    printf("max tex array layers = %d\n", e->gpu_props.limits.maxImageArrayLayers);
+    printf("max mem alloc count = %d\n", e->gpu_props.limits.maxMemoryAllocationCount);
+
+    for (int i = 0; i < e->memory_properties.memoryHeapCount; i++) {
+        printf("Mem Heap %d\n", i);
+        printf("\tflags= %d\n", e->memory_properties.memoryHeaps[i].flags);
+        printf("\tsize = %d Mo\n", e->memory_properties.memoryHeaps[i].size/ (1024*1024));
+    }
+    for (int i = 0; i < e->memory_properties.memoryTypeCount; i++) {
+        printf("Mem type %d\n", i);
+        printf("\theap %d: ", e->memory_properties.memoryTypes[i].heapIndex);
+        if (e->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+            printf("VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT|");
+        if (e->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+            printf("VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|");
+        if (e->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+            printf("VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|");
+        if (e->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
+            printf("VK_MEMORY_PROPERTY_HOST_CACHED_BIT|");
+        if (e->memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT)
+            printf("VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT|");
+        printf("\n");
+    }
+
 
     uint32_t queue_family_count = 0;
     int cQueue = -1, gQueue = -1, tQueue = -1;
@@ -376,34 +401,14 @@ void buildCommandBuffers(vkh_presenter* r){
                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-        //if (VKVG_SAMPLES == VK_SAMPLE_COUNT_1_BIT){
-            VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                    .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                    .srcOffset = {},
-                                    .dstOffset = {0,0,0},
-                                    .extent = {1024,800,1}};
+        VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                .srcOffset = {},
+                                .dstOffset = {0,0,0},
+                                .extent = {1024,800,1}};
 
-            vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_GENERAL,
-                           1, &cregion);
-//            VkImageBlit region = { .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-//                                           .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-//                                           .srcOffsets[0] = {0,0,0},
-//                                           .srcOffsets[1] = {1024,800,1},
-//                                           .dstOffsets[0] = {0,0,0},
-//                                           .dstOffsets[1] = {1024,800,1} };
-
-//            vkCmdBlitImage(cb, bltSrcImage,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,bltDstImage,VK_IMAGE_LAYOUT_GENERAL,
-//                1, &region, VK_FILTER_LINEAR);
-//        }else{
-//            VkImageResolve resolveInfo = {
-//                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {0,0,0},
-//                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {0,0,0},
-//                {1024,800,1}
-//            };
-
-//            vkCmdResolveImage(cb,bltSrcImage,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,bltDstImage,VK_IMAGE_LAYOUT_GENERAL,
-//                              1, &resolveInfo);
-//        }
+        vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_GENERAL,
+                       1, &cregion);
 
         set_image_layout(cb, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -447,19 +452,19 @@ void vkvg_test_fill(VkvgContext ctx){
 }
 
 void vkvg_test_stroke(VkvgContext ctx){
-    vkvg_set_linewidth(ctx, 50);
+    vkvg_set_linewidth(ctx, 1);
     vkvg_set_rgba(ctx,1,0,0,1);
-    vkvg_move_to(ctx,200,200);
-    vkvg_line_to(ctx,400,200);
-    vkvg_line_to(ctx,400,400);
-    vkvg_line_to(ctx,200,400);
+    vkvg_move_to(ctx,200.5,200.5);
+    vkvg_line_to(ctx,400.5,200.5);
+    vkvg_line_to(ctx,400.5,400.5);
+    vkvg_line_to(ctx,200.5,400.5);
     vkvg_close_path(ctx);
     vkvg_stroke(ctx);
     vkvg_set_rgba(ctx,0.5,1,0,1);
-    vkvg_move_to(ctx,300,300);
-    vkvg_line_to(ctx,500,300);
-    vkvg_line_to(ctx,500,500);
-    vkvg_line_to(ctx,300,500);
+    vkvg_move_to(ctx,300.5,300.5);
+    vkvg_line_to(ctx,500.5,300.5);
+    vkvg_line_to(ctx,500.5,500.5);
+    vkvg_line_to(ctx,300.5,500.5);
     vkvg_close_path(ctx);
     vkvg_stroke(ctx);
     vkvg_set_linewidth(ctx, 40);

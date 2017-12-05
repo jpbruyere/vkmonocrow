@@ -11,5 +11,7 @@ typedef struct _vkvg_surface_t {
 	VkFramebuffer fb;
 	vkh_image	img;
 	vkh_image	imgMS;
+	vkh_image	stencil;
+	vkh_image	stencilMS;
 }vkvg_surface;
 #endif
