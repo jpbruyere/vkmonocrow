@@ -9,40 +9,18 @@ void _check_pathes_array (vkvg_context* ctx){
     ctx->sizePathes += VKVG_PATHES_SIZE;
     ctx->pathes = (uint32_t*) realloc (ctx->pathes, ctx->sizePathes*sizeof(uint32_t));
 }
-void _check_point_array (vkvg_context* ctx){
-    if (ctx->sizePoints - ctx->pointCount > VKVG_ARRAY_THRESHOLD)
-        return;
-    ctx->sizePoints += VKVG_BUFF_SIZE;
-    ctx->points = (vec2*) realloc (ctx->points, ctx->sizePoints*sizeof(vec2));
-}
-void _check_vertex_buff_size (vkvg_context* ctx){
-    if (ctx->sizeVertices - ctx->vertCount > VKVG_ARRAY_THRESHOLD)
-        return;
-    ctx->sizeVertices += VKVG_BUFF_SIZE;
-    vkvg_buffer_increase_size(&ctx->vertices, VKVG_BUFF_SIZE * sizeof(Vertex));
-}
-void _check_index_buff_size (vkvg_context* ctx){
-    if (ctx->sizeIndices - ctx->indCount > VKVG_ARRAY_THRESHOLD)
-        return;
-    ctx->sizeIndices += VKVG_BUFF_SIZE * 2;
-    vkvg_buffer_increase_size(&ctx->indices, VKVG_BUFF_SIZE * sizeof(uint32_t) * 2);
-}
-
 void _add_point(vkvg_context* ctx, float x, float y){
-    _check_point_array(ctx);
     ctx->curPos.x = x;
     ctx->curPos.y = y;
     ctx->points[ctx->pointCount] = ctx->curPos;
     ctx->pointCount++;
 }
 void _add_point_v2(vkvg_context* ctx, vec2 v){
-    _check_point_array(ctx);
     ctx->curPos = v;
     ctx->points[ctx->pointCount] = ctx->curPos;
     ctx->pointCount++;
 }
 void _add_curpos (vkvg_context* ctx){
-    _check_point_array(ctx);
     ctx->points[ctx->pointCount] = ctx->curPos;
     ctx->pointCount++;
 }
@@ -68,7 +46,6 @@ void _set_vertex(vkvg_context* ctx, uint32_t idx, Vertex v){
 }
 void _add_tri_indices_for_rect (vkvg_context* ctx, uint32_t i){
     uint32_t* inds = (uint32_t*)(ctx->indices.mapped + (ctx->indCount * sizeof(uint32_t)));
-    //uint32_t ii = 2*i;
     inds[0] = i;
     inds[1] = i+2;
     inds[2] = i+1;
@@ -88,15 +65,16 @@ void _add_triangle_indices(vkvg_context* ctx, uint32_t i0, uint32_t i1,uint32_t 
 void _create_cmd_buff (vkvg_context* ctx){
     ctx->cmd = vkh_cmd_buff_create(ctx->pSurf->dev->vkDev, ctx->pSurf->dev->cmdPool,VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 }
+void _record_draw_cmd (vkvg_context* ctx){
+    if (ctx->indCount == ctx->curIndStart)
+        return;
+    vkCmdDrawIndexed(ctx->cmd, ctx->indCount - ctx->curIndStart, 1, ctx->curIndStart, 0, 1);
+    ctx->curIndStart = ctx->indCount;
+}
+
 void _flush_cmd_buff (vkvg_context* ctx){
-    VkDeviceSize offsets[1] = { 0 };
-    vkCmdBindVertexBuffers(ctx->cmd, 0, 1, &ctx->vertices.buffer, offsets);
-    vkCmdBindIndexBuffer(ctx->cmd, ctx->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(ctx->cmd, ctx->fillIndCount, 1, 0, 0, 1);
-#ifdef DEBUG
-    vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineLineList);
-    vkCmdDrawIndexed(ctx->cmd, ctx->indCount - ctx->fillIndCount, 1, ctx->fillIndCount, 0, 1);
-#endif
+    _record_draw_cmd(ctx);
+
     vkCmdEndRenderPass (ctx->cmd);
     vkh_cmd_end (ctx->cmd);
     VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
@@ -114,7 +92,8 @@ void _flush_cmd_buff (vkvg_context* ctx){
     _init_cmd_buff(ctx);
 }
 void _init_cmd_buff (vkvg_context* ctx){
-    ctx->pointCount = ctx->vertCount = ctx->indCount = ctx->pathPtr = ctx->totalPoints = 0;
+    ctx->pointCount = ctx->vertCount = ctx->indCount = ctx->pathPtr = ctx->totalPoints = ctx->curIndStart = 0;
+
     VkClearValue clearValues[1] = {{ { 0.0f, 0.0f, 0.0f, 0.0f } }};
     VkRenderPassBeginInfo renderPassBeginInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                                                   .renderPass = ctx->pSurf->dev->renderPass,
@@ -132,6 +111,9 @@ void _init_cmd_buff (vkvg_context* ctx){
     vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipeline);
     vkCmdBindDescriptorSets(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineLayout,
                             0, 1, &ctx->pSurf->dev->descriptorSet, 0, NULL);
+    VkDeviceSize offsets[1] = { 0 };
+    vkCmdBindVertexBuffers(ctx->cmd, 0, 1, &ctx->vertices.buffer, offsets);
+    vkCmdBindIndexBuffer(ctx->cmd, ctx->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 
 void _finish_path (vkvg_context* ctx){

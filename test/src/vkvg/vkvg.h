@@ -23,6 +23,43 @@ VkvgSurface vkvg_surface_create			(VkvgDevice dev, int32_t width, uint32_t heigh
 void		vkvg_surface_destroy		(VkvgSurface surf);
 VkImage		vkvg_surface_get_vk_image	(VkvgSurface surf);
 
+//mimic from cairo, to facilitate usage of vkvg as cairo vulkan backend
+typedef enum _vkvg_operator {
+	VKVG_OPERATOR_CLEAR,
+
+	VKVG_OPERATOR_SOURCE,
+	VKVG_OPERATOR_OVER,
+	VKVG_OPERATOR_IN,
+	VKVG_OPERATOR_OUT,
+	VKVG_OPERATOR_ATOP,
+
+	VKVG_OPERATOR_DEST,
+	VKVG_OPERATOR_DEST_OVER,
+	VKVG_OPERATOR_DEST_IN,
+	VKVG_OPERATOR_DEST_OUT,
+	VKVG_OPERATOR_DEST_ATOP,
+
+	VKVG_OPERATOR_XOR,
+	VKVG_OPERATOR_ADD,
+	VKVG_OPERATOR_SATURATE,
+
+	VKVG_OPERATOR_MULTIPLY,
+	VKVG_OPERATOR_SCREEN,
+	VKVG_OPERATOR_OVERLAY,
+	VKVG_OPERATOR_DARKEN,
+	VKVG_OPERATOR_LIGHTEN,
+	VKVG_OPERATOR_COLOR_DODGE,
+	VKVG_OPERATOR_COLOR_BURN,
+	VKVG_OPERATOR_HARD_LIGHT,
+	VKVG_OPERATOR_SOFT_LIGHT,
+	VKVG_OPERATOR_DIFFERENCE,
+	VKVG_OPERATOR_EXCLUSION,
+	VKVG_OPERATOR_HSL_HUE,
+	VKVG_OPERATOR_HSL_SATURATION,
+	VKVG_OPERATOR_HSL_COLOR,
+	VKVG_OPERATOR_HSL_LUMINOSITY
+} vkvg_operator_t;
+
 /*Context*/
 VkvgContext vkvg_create		(VkvgSurface surf);
 void vkvg_destroy			(VkvgContext ctx);
@@ -34,7 +71,9 @@ void vkvg_line_to			(VkvgContext ctx, float x, float y);
 void vkvg_move_to			(VkvgContext ctx, float x, float y);
 void vkvg_arc				(VkvgContext ctx, float xc, float yc, float radius, float a1, float a2);
 void vkvg_stroke			(VkvgContext ctx);
+void vkvg_stroke_preserve	(VkvgContext ctx);
 void vkvg_fill				(VkvgContext ctx);
+void vkvg_fill_preserve		(VkvgContext ctx);
 void vkvg_set_rgba			(VkvgContext ctx, float r, float g, float b, float a);
 void vkvg_set_linewidth		(VkvgContext ctx, float width);
 

@@ -15,8 +15,9 @@ VkvgContext vkvg_create(VkvgSurface surf)
 {
     VkvgContext ctx = (vkvg_context*)malloc(sizeof(vkvg_context));
 
-    ctx->sizeVertices = ctx->sizePoints = VKVG_BUFF_SIZE;
-    ctx->sizeIndices = VKVG_BUFF_SIZE * 2;
+    ctx->sizePoints = VKVG_PTS_SIZE;
+    ctx->sizeVertices = VKVG_VBO_SIZE;
+    ctx->sizeIndices = VKVG_IBO_SIZE;
     ctx->sizePathes = VKVG_PATHES_SIZE;
     ctx->curPos.x = ctx->curPos.y = 0;
     ctx->lineWidth = 1;
@@ -24,7 +25,7 @@ VkvgContext vkvg_create(VkvgSurface surf)
 
     ctx->flushFence = vkh_fence_create(ctx->pSurf->dev->vkDev);
 
-    ctx->points = (vec2*)malloc (VKVG_BUFF_SIZE*sizeof(vec2));
+    ctx->points = (vec2*)malloc (VKVG_VBO_SIZE*sizeof(vec2));
     ctx->pathes = (uint32_t*)malloc (VKVG_PATHES_SIZE*sizeof(uint32_t));
 
     _create_vertices_buff(ctx);
@@ -37,7 +38,8 @@ VkvgContext vkvg_create(VkvgSurface surf)
 void vkvg_flush (VkvgContext ctx){
     if (ctx->indCount == 0)
         return;
-    ctx->fillIndCount = ctx->indCount;
+
+    _flush_cmd_buff(ctx);
 
 #ifdef DEBUG
 
@@ -47,8 +49,6 @@ void vkvg_flush (VkvgContext ctx){
 
     int j = 0;
     while (j < dlpCount) {
-        _check_vertex_buff_size(ctx);
-        _check_index_buff_size(ctx);
         add_line(ctx, debugLinePoints[j], debugLinePoints[j+1],green);
         j+=2;
         add_line(ctx, debugLinePoints[j], debugLinePoints[j+1],red);
@@ -57,9 +57,11 @@ void vkvg_flush (VkvgContext ctx){
         j+=2;
     }
     dlpCount = 0;
+    vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineLineList);
+    vkCmdDrawIndexed(ctx->cmd, ctx->indCount-ctx->curIndStart, 1, ctx->curIndStart, 0, 1);
+    _flush_cmd_buff(ctx);
 #endif
 
-    _flush_cmd_buff(ctx);
 }
 
 void vkvg_destroy (VkvgContext ctx)
@@ -176,9 +178,6 @@ void add_line(vkvg_context* ctx, vec2 p1, vec2 p2, vec4 col){
 }
 
 void _build_vb_step (vkvg_context* ctx, Vertex v, double hw, uint32_t iL, uint32_t i, uint32_t iR){
-    _check_vertex_buff_size(ctx);
-    _check_index_buff_size(ctx);
-
     double alpha = 0;
     vec2 v0n = vec2_line_norm(ctx->points[iL], ctx->points[i]);
     vec2 v1n = vec2_line_norm(ctx->points[i], ctx->points[iR]);
@@ -236,16 +235,15 @@ static inline float ecp_zcross (ear_clip_point* p0, ear_clip_point* p1, ear_clip
     return vec2_zcross (vec2_sub (p1->pos, p0->pos), vec2_sub (p2->pos, p0->pos));
 }
 
-void vkvg_fill (VkvgContext ctx){
-
-    if (ctx->pathPtr == 0)//nothing to stroke
+void vkvg_fill_preserve (VkvgContext ctx){
+    if (ctx->pathPtr == 0)      //nothing to fill
         return;
-    if (ctx->pathPtr % 2 != 0)//current path is no close
+    if (ctx->pathPtr % 2 != 0)  //current path is no close
         vkvg_close_path(ctx);
+    if (ctx->pointCount * 4 > ctx->sizeIndices - ctx->indCount)
+        vkvg_flush(ctx);
 
-    int i = 0, ptrPath = 0;
-
-    uint32_t lastPathPointIdx, iL, iR;
+    uint32_t lastPathPointIdx, i = 0, ptrPath = 0;;
     Vertex v = { .col = ctx->curRGBA };
     v.uv.z = -1;
 
@@ -312,15 +310,20 @@ void vkvg_fill (VkvgContext ctx){
 
         ptrPath+=2;
     }
+    _record_draw_cmd(ctx);
+}
+void vkvg_fill (VkvgContext ctx){
+    vkvg_fill_preserve(ctx);
     _clear_path(ctx);
 }
-
-void vkvg_stroke (VkvgContext ctx)
+void vkvg_stroke_preserve (VkvgContext ctx)
 {
     _finish_path(ctx);
 
     if (ctx->pathPtr == 0)//nothing to stroke
         return;
+    if (ctx->pointCount * 4 > ctx->sizeIndices - ctx->indCount)
+        vkvg_flush(ctx);
 
     Vertex v = { .col = ctx->curRGBA };
     v.uv.z = -1;
@@ -384,7 +387,11 @@ void vkvg_stroke (VkvgContext ctx)
 
         ptrPath+=2;
     }
-
+    _record_draw_cmd(ctx);
+}
+void vkvg_stroke (VkvgContext ctx)
+{
+    vkvg_stroke_preserve(ctx);
     _clear_path(ctx);
 }
 
@@ -414,4 +421,5 @@ void vkvg_set_font_size (VkvgContext ctx, uint32_t size){
 }
 void vkvg_show_text (VkvgContext ctx, const char* text){
     _show_text(ctx,text);
+    _record_draw_cmd(ctx);
 }

@@ -252,9 +252,6 @@ void _show_text (VkvgContext ctx, const char* text){
     //_show_texture(ctx); return;
 
     for (int i=0; i < glyph_count; ++i) {
-        _check_vertex_buff_size(ctx);
-        _check_index_buff_size(ctx);
-
         _char_ref* cr = f->charLookup[glyph_info[i].codepoint];
 
         if (cr!=NULL){
