@@ -108,6 +108,13 @@ void _init_cmd_buff (vkvg_context* ctx){
 
     VkRect2D scissor = {{0,0},{ctx->pSurf->width,ctx->pSurf->height}};
     vkCmdSetScissor(ctx->cmd, 0, 1, &scissor);
+
+    push_constants pc = {{2.0f/(float)ctx->pSurf->width,2.0f/(float)ctx->pSurf->height},{-1.f,-1.f}};
+    vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
+                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants),&pc);
+
+    vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
+
     vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipeline);
     vkCmdBindDescriptorSets(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineLayout,
                             0, 1, &ctx->pSurf->dev->descriptorSet, 0, NULL);

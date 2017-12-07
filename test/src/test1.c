@@ -445,10 +445,23 @@ void draw(VkEngine* e) {
 void vkvg_test_fill(VkvgContext ctx){
     vkvg_set_rgba(ctx,0.1,0.1,0.8,0.4);
     vkvg_move_to(ctx,100,100);
-    vkvg_line_to(ctx,950,550);
+    vkvg_line_to(ctx,400,350);
+    vkvg_line_to(ctx,900,150);
+    vkvg_line_to(ctx,700,450);
+    vkvg_line_to(ctx,900,750);
+    vkvg_line_to(ctx,500,650);
     vkvg_line_to(ctx,100,800);
+    vkvg_line_to(ctx,150,400);
     vkvg_close_path(ctx);
     vkvg_fill(ctx);
+}
+
+void vkvg_rectangle(VkvgContext ctx, float x, float y, float width, float height){
+    vkvg_move_to(ctx,x,y);
+    vkvg_line_to(ctx,x+width,y);
+    vkvg_line_to(ctx,x+width,y+height);
+    vkvg_line_to(ctx,x,y+height);
+    vkvg_close_path(ctx);
 }
 
 void vkvg_test_stroke(VkvgContext ctx){
@@ -506,6 +519,10 @@ int main(int argc, char *argv[]) {
 
     VkvgContext ctx = vkvg_create(surf);
 
+    vkvg_set_rgba(ctx,1,1,1,1);
+    vkvg_rectangle(ctx,100,100,400,400);
+    vkvg_clip(ctx);
+
     vkvg_select_font_face(ctx, "/usr/local/share/fonts/DroidSansMono.ttf");
     //vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/unifont/unifont.ttf");
 
@@ -514,17 +531,21 @@ int main(int argc, char *argv[]) {
     vkvg_show_text (ctx,"Abracadabra {this} test is ô good");
 
     vkvg_test_fill(ctx);
+
+    vkvg_rectangle(ctx,300,300,400,400);
+    vkvg_clip(ctx);
+
+
     vkvg_test_stroke(ctx);
 
-
-
-    /*vkvg_move_to(ctx, 150,150);
-    vkvg_show_text (ctx,"test string é€");
-    vkvg_move_to(ctx, 150,200);
-    vkvg_show_text (ctx,"كسول الزنجبيل القط");
-    vkvg_move_to(ctx, 150,250);
-    vkvg_show_text (ctx,"懶惰的姜貓");*/
+    vkvg_reset_clip(ctx);
     vkvg_set_rgba(ctx,0.7,0.7,0.9,1);
+/*    vkvg_move_to(ctx, 150,250);
+    vkvg_show_text (ctx,"test string é€");
+    vkvg_move_to(ctx, 150,300);
+    vkvg_show_text (ctx,"كسول الزنجبيل القط");
+    vkvg_move_to(ctx, 150,350);
+    vkvg_show_text (ctx,"懶惰的姜貓");*/
     vkvg_move_to(ctx, 80,400);
     vkvg_show_text (ctx,"Ленивый рыжий кот");
 

@@ -15,12 +15,14 @@ out gl_PerVertex
 	vec4 gl_Position;
 };
 
-const vec2 scale=vec2(2.0/1024.0,2.0/800.0);
-const vec2 translate=vec2(-1.0);
+layout(push_constant) uniform PushConsts {
+	vec2 scale;
+	vec2 translate;
+} pushConsts;
 
 void main()
 {
 	outColor = inColor;
 	outUV = inUV;
-	gl_Position = vec4(inPos.xy*scale+translate,0.0, 1.0);
+	gl_Position = vec4(inPos.xy*pushConsts.scale+pushConsts.translate,0.0, 1.0);
 }

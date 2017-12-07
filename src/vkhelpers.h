@@ -30,6 +30,8 @@ VkCommandBuffer vkh_cmd_buff_create (VkDevice dev, VkCommandPool cmdPool, VkComm
 void vkh_cmd_begin(VkCommandBuffer cmdBuff, VkCommandBufferUsageFlags flags);
 void vkh_cmd_end(VkCommandBuffer cmdBuff);
 void vkh_cmd_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence);
+void vkh_cmd_submit_with_semaphores(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore waitSemaphore,
+                                    VkSemaphore signalSemaphore, VkFence fence);
 void vkcrow_cmd_copy_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore* pWaitSemaphore, VkSemaphore* pSignalSemaphore);
 
 VkShaderModule vkh_load_module(VkDevice dev, const char* path);

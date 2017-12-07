@@ -77,6 +77,27 @@ void vkh_cmd_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkFence fence){
                                  .pCommandBuffers = pCmdBuff};
     VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, fence));
 }
+void vkh_cmd_submit_with_semaphores(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore waitSemaphore,
+                                    VkSemaphore signalSemaphore, VkFence fence){
+
+    VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                 .pWaitDstStageMask = &stageFlags,
+                                 .commandBufferCount = 1,
+                                 .pCommandBuffers = pCmdBuff};
+
+    if (waitSemaphore != VK_NULL_HANDLE){
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = &waitSemaphore;
+    }
+    if (signalSemaphore != VK_NULL_HANDLE){
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores= &signalSemaphore;
+    }
+
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, fence));
+}
+
 
 
 void set_image_layout(VkCommandBuffer cmdBuff, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout old_image_layout,

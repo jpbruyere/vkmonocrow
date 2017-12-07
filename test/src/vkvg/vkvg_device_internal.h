@@ -3,28 +3,34 @@
 
 #include "vkvg.h"
 
+typedef struct {
+    vec2    scale;
+    vec2    translate;
+}push_constants;
+
 typedef struct _vkvg_device_t{
-	VkDevice				vkDev;
-	VkPhysicalDeviceMemoryProperties phyMemProps;
-	VkRenderPass			renderPass;
+    VkDevice				vkDev;
+    VkPhysicalDeviceMemoryProperties phyMemProps;
+    VkRenderPass			renderPass;
 
-	VkQueue					queue;
-	VkCommandPool			cmdPool;
+    VkQueue					queue;
+    VkCommandPool			cmdPool;
 
-	VkPipeline				pipeline;
-	VkPipeline				pipeline_OP_SUB;
-	VkPipeline				pipelineWired;
-	VkPipeline				pipelineLineList;
-	VkPipelineCache			pipelineCache;
-	VkPipelineLayout		pipelineLayout;
-	VkDescriptorPool		descriptorPool;
-	VkDescriptorSet			descriptorSet;
-	VkDescriptorSetLayout	descriptorSetLayout;
+    VkPipeline				pipeline;
+    VkPipeline				pipelineClipping;
+    VkPipeline				pipeline_OP_SUB;
+    VkPipeline				pipelineWired;
+    VkPipeline				pipelineLineList;
+    VkPipelineCache			pipelineCache;
+    VkPipelineLayout		pipelineLayout;
+    VkDescriptorPool		descriptorPool;
+    VkDescriptorSet			descriptorSet;
+    VkDescriptorSetLayout	descriptorSetLayout;
 
-	int		hdpi,
-			vdpi;
+    int		hdpi,
+            vdpi;
 
-	void*	fontCache;
+    void*	fontCache;
 
 }vkvg_device;
 #endif

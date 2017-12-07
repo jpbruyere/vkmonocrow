@@ -12,37 +12,38 @@
 #define VKVG_ARRAY_THRESHOLD		4
 
 typedef struct _vkvg_context_t {
-	VkvgSurface		pSurf;
-	VkCommandBuffer cmd;
-	VkFence			flushFence;
+    VkvgSurface		pSurf;
+    VkCommandBuffer cmd;
+    VkFence			flushFence;
+    uint32_t        stencilRef;
 
-	//vk buffers, holds data until flush
-	vkvg_buff	indices;
-	size_t		sizeIndices;
-	uint32_t	indCount;
+    //vk buffers, holds data until flush
+    vkvg_buff	indices;
+    size_t		sizeIndices;
+    uint32_t	indCount;
 
-	uint32_t	curIndStart;
+    uint32_t	curIndStart;
 
-	vkvg_buff	vertices;
-	size_t		sizeVertices;
-	uint32_t	vertCount;
+    vkvg_buff	vertices;
+    size_t		sizeVertices;
+    uint32_t	vertCount;
 
-	//pathes, exists until stroke of fill
-	vec2*		points;
-	size_t		sizePoints;
-	uint32_t	pointCount;
-	uint32_t	totalPoints;
+    //pathes, exists until stroke of fill
+    vec2*		points;
+    size_t		sizePoints;
+    uint32_t	pointCount;
+    uint32_t	totalPoints;
 
-	uint32_t	pathPtr;
-	uint32_t*	pathes;
-	size_t		sizePathes;
+    uint32_t	pathPtr;
+    uint32_t*	pathes;
+    size_t		sizePathes;
 
-	vec2		curPos;
-	vec4		curRGBA;
-	float		lineWidth;
+    vec2		curPos;
+    vec4		curRGBA;
+    float		lineWidth;
 
-	void*		curFont;
-	VkvgDirection textDirection;
+    void*		curFont;
+    VkvgDirection textDirection;
 }vkvg_context;
 
 void _check_pathes_array	(vkvg_context* ctx);

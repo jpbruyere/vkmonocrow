@@ -1,6 +1,17 @@
 #include "vkvg_surface_internal.h"
 #include "vkvg_device_internal.h"
 
+void _clear_depth_stencil(VkvgSurface surf, float depth, uint32_t stencil){
+
+    vkh_cmd_begin(surf->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    VkClearDepthStencilValue dsClear = {depth,stencil};
+    VkImageSubresourceRange imgSubresRange = {VK_IMAGE_ASPECT_STENCIL_BIT,0,1,0,1};
+    vkCmdClearDepthStencilImage(surf->cmd,surf->stencilMS.image,VK_IMAGE_LAYOUT_GENERAL,&dsClear,1, &imgSubresRange);
+    vkh_cmd_end(surf->cmd);
+
+    vkh_cmd_submit_with_semaphores(surf->dev->queue,&surf->cmd,VK_NULL_HANDLE,surf->semaphore,VK_NULL_HANDLE);
+}
+
 VkvgSurface vkvg_surface_create(VkvgDevice dev, int32_t width, uint32_t height){
     VkvgSurface surf = (vkvg_surface*)calloc(1,sizeof(vkvg_surface));
 
@@ -38,15 +49,23 @@ VkvgSurface vkvg_surface_create(VkvgDevice dev, int32_t width, uint32_t height){
                                                       .width = width,
                                                       .height = height,
                                                       .layers = 1 };
-    VK_CHECK_RESULT(vkCreateFramebuffer(dev->vkDev, &frameBufferCreateInfo, NULL, &surf->fb));
+    VK_CHECK_RESULT(vkCreateFramebuffer(surf->dev->vkDev, &frameBufferCreateInfo, NULL, &surf->fb));
+
+    surf->semaphore = vkh_semaphore_create(dev->vkDev);
+    surf->cmd = vkh_cmd_buff_create(surf->dev->vkDev, surf->dev->cmdPool,VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
     return surf;
 }
 
 void vkvg_surface_destroy(VkvgSurface surf)
 {
+    vkDestroySemaphore(surf->dev->vkDev,surf->semaphore,NULL);
+    vkFreeCommandBuffers(surf->dev->vkDev,surf->dev->cmdPool,1,&surf->cmd);
     vkDestroyFramebuffer(surf->dev->vkDev, surf->fb, NULL);
     vkh_image_destroy(&surf->img);
     vkh_image_destroy(&surf->imgMS);
+    vkh_image_destroy(&surf->stencil);
+    vkh_image_destroy(&surf->stencilMS);
     free(surf);
 }
 

@@ -1,4 +1,4 @@
-#include "vkvg.h"
+﻿#include "vkvg.h"
 #include "vkvg_internal.h"
 #include "vkvg_fonts.h"
 #include "vkvg_device_internal.h"
@@ -39,6 +39,7 @@ VkvgDevice vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPh
 void vkvg_device_destroy(VkvgDevice dev)
 {
     vkDestroyPipeline (dev->vkDev, dev->pipeline, NULL);
+    vkDestroyPipeline (dev->vkDev, dev->pipelineClipping, NULL);
     vkDestroyPipelineLayout(dev->vkDev, dev->pipelineLayout, NULL);
     vkDestroyRenderPass (dev->vkDev, dev->renderPass, NULL);
     vkDestroyCommandPool (dev->vkDev, dev->cmdPool, NULL);
@@ -151,7 +152,7 @@ void _setupPipelines(VkvgDevice dev)
                 .lineWidth = 1.0f };
 
     VkPipelineColorBlendAttachmentState blendAttachmentState =
-    { .colorWriteMask = 0xf, .blendEnable = VK_TRUE,
+    { .colorWriteMask = 0x0, .blendEnable = VK_TRUE,
       .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
       .dstColorBlendFactor= VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
       .colorBlendOp = VK_BLEND_OP_ADD,
@@ -164,19 +165,22 @@ void _setupPipelines(VkvgDevice dev)
                 .attachmentCount = 1,
                 .pAttachments = &blendAttachmentState };
 
+                                        /*failOp,passOp,depthFailOp,compareOp, compareMask, writeMask, reference;*/
+    VkStencilOpState clipingOpState = {VK_STENCIL_OP_KEEP,VK_STENCIL_OP_INCREMENT_AND_CLAMP,VK_STENCIL_OP_KEEP,VK_COMPARE_OP_EQUAL,0x0,0xf,0};
+    VkStencilOpState stencilOpState = {VK_STENCIL_OP_KEEP,VK_STENCIL_OP_REPLACE,VK_STENCIL_OP_KEEP,VK_COMPARE_OP_EQUAL,0xf,0x0,0};
+
     VkPipelineDepthStencilStateCreateInfo dsStateCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
                 .depthTestEnable = VK_FALSE,
                 .depthWriteEnable = VK_FALSE,
                 .depthCompareOp = VK_COMPARE_OP_ALWAYS,
-                .stencilTestEnable = VK_FALSE,
-                .front = {},
-                .back = {} };
+                .stencilTestEnable = VK_TRUE,
+                .front = clipingOpState,
+                .back = clipingOpState };
 
     VkDynamicState dynamicStateEnables[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR,
-        VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
-        VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
+        VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
     VkPipelineDynamicStateCreateInfo dynamicState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
                 .dynamicStateCount = 2,
@@ -231,7 +235,13 @@ void _setupPipelines(VkvgDevice dev)
     pipelineCreateInfo.pDynamicState = &dynamicState;
     pipelineCreateInfo.layout = dev->pipelineLayout;
 
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, dev->pipelineCache, 1, &pipelineCreateInfo, NULL, &dev->pipelineClipping));
+
+    //dsStateCreateInfo.back.writeMask = dsStateCreateInfo.front.writeMask = 0;
+    dsStateCreateInfo.back = dsStateCreateInfo.front = stencilOpState;
+    blendAttachmentState.colorWriteMask=0xf;
     VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, dev->pipelineCache, 1, &pipelineCreateInfo, NULL, &dev->pipeline));
+
     blendAttachmentState.alphaBlendOp = blendAttachmentState.colorBlendOp = VK_BLEND_OP_SUBTRACT;
     VK_CHECK_RESULT(vkCreateGraphicsPipelines(dev->vkDev, dev->pipelineCache, 1, &pipelineCreateInfo, NULL, &dev->pipeline_OP_SUB));
 
@@ -249,26 +259,30 @@ void _setupPipelines(VkvgDevice dev)
 
 void _createDescriptorSetLayout (VkvgDevice dev) {
 
-    VkDescriptorSetLayoutBinding dsLayoutBinding = { .binding = 0,
-                                                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                                    .descriptorCount = 1,
-                                                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT };
+    VkDescriptorSetLayoutBinding dsLayoutBinding = {
+        0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,VK_SHADER_STAGE_FRAGMENT_BIT
+    };
     VkDescriptorSetLayoutCreateInfo dsLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                                                           .bindingCount = 1,
                                                           .pBindings = &dsLayoutBinding };
     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(dev->vkDev, &dsLayoutCreateInfo, NULL, &dev->descriptorSetLayout));
 
+    VkPushConstantRange pushConstantRange = {VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(push_constants)};
+
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                                                            .pushConstantRangeCount = 1,
+                                                            .pPushConstantRanges = &pushConstantRange,
                                                             .setLayoutCount = 1,
                                                             .pSetLayouts = &dev->descriptorSetLayout };
     VK_CHECK_RESULT(vkCreatePipelineLayout(dev->vkDev, &pipelineLayoutCreateInfo, NULL, &dev->pipelineLayout));
 }
 
 void _createDescriptorSet (VkvgDevice dev) {
-    VkDescriptorPoolSize descriptorPoolSize = { .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                                .descriptorCount = 1 };
+    VkDescriptorPoolSize descriptorPoolSize = {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 };
+
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-                                                            .maxSets = 1,
+                                                            .maxSets = 2,
+                                                            .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
                                                             .poolSizeCount = 1,
                                                             .pPoolSizes = &descriptorPoolSize };
     VK_CHECK_RESULT(vkCreateDescriptorPool(dev->vkDev, &descriptorPoolCreateInfo, NULL, &dev->descriptorPool));
@@ -280,6 +294,7 @@ void _createDescriptorSet (VkvgDevice dev) {
     VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &dev->descriptorSet));
 
     _font_cache_t* cache = (_font_cache_t*)dev->fontCache;
+
     VkDescriptorImageInfo descImgInfo = { .imageView = cache->cacheTex.pDescriptor->imageView,
                                           .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
                                           .sampler = cache->cacheTex.pDescriptor->sampler };

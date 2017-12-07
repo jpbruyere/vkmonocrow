@@ -22,6 +22,7 @@ VkvgContext vkvg_create(VkvgSurface surf)
     ctx->curPos.x = ctx->curPos.y = 0;
     ctx->lineWidth = 1;
     ctx->pSurf = surf;
+    ctx->stencilRef = 0;
 
     ctx->flushFence = vkh_fence_create(ctx->pSurf->dev->vkDev);
 
@@ -234,7 +235,26 @@ static inline float vec2_zcross (vec2 v1, vec2 v2){
 static inline float ecp_zcross (ear_clip_point* p0, ear_clip_point* p1, ear_clip_point* p2){
     return vec2_zcross (vec2_sub (p1->pos, p0->pos), vec2_sub (p2->pos, p0->pos));
 }
-
+void vkvg_clip_preserve (VkvgContext ctx){
+    vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineClipping);
+    vkvg_fill_preserve(ctx);
+    //vkvg_flush(ctx);
+    //should test current operator to bind correct pipeline
+    ctx->stencilRef++;
+    vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipeline);
+    vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
+}
+void vkvg_reset_clip (VkvgContext ctx){
+    VkClearAttachment clrAtt = {VK_IMAGE_ASPECT_STENCIL_BIT,2,0};
+    VkClearRect clr = {{{0,0},{ctx->pSurf->width,ctx->pSurf->height}},0,1};
+    vkCmdClearAttachments (ctx->cmd ,1,&clrAtt,1,&clr);
+    ctx->stencilRef=0;
+    vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
+}
+void vkvg_clip (VkvgContext ctx){
+    vkvg_clip_preserve(ctx);
+    _clear_path(ctx);
+}
 void vkvg_fill_preserve (VkvgContext ctx){
     if (ctx->pathPtr == 0)      //nothing to fill
         return;
