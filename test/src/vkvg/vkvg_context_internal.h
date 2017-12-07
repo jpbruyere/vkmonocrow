@@ -4,6 +4,7 @@
 #include "vkvg.h"
 #include "vkvg_internal.h"
 #include "vkvg_buff.h"
+#include "vkh_image.h"
 
 #define VKVG_PTS_SIZE				4096
 #define VKVG_VBO_SIZE				VKVG_PTS_SIZE * 2
@@ -16,6 +17,8 @@ typedef struct _vkvg_context_t {
     VkCommandBuffer cmd;
     VkFence			flushFence;
     uint32_t        stencilRef;
+    vkh_image       source;
+    VkDescriptorSet	descriptorSet;
 
     //vk buffers, holds data until flush
     vkvg_buff	indices;
@@ -59,9 +62,10 @@ void _add_tri_indices_for_rect	(vkvg_context* ctx, uint32_t i);
 void _add_triangle_indices		(vkvg_context* ctx, uint32_t i0, uint32_t i1,uint32_t i2);
 
 void _create_cmd_buff		(vkvg_context* ctx);
-void _flush_cmd_buff		(vkvg_context* ctx);
-void _record_draw_cmd		(vkvg_context* ctx);
 void _init_cmd_buff			(vkvg_context* ctx);
+void _flush_cmd_buff		(vkvg_context* ctx);
+void _record_draw_cmd		(VkvgContext ctx);
+void _submit_wait_and_reset_cmd            (VkvgContext ctx);
 
 void _finish_path			(vkvg_context* ctx);
 void _clear_path			(vkvg_context* ctx);

@@ -11,28 +11,69 @@ static vec2 debugLinePoints[1000];
 static uint32_t dlpCount = 0;
 #endif
 
+void _init_source (VkvgContext ctx){
+    VkvgDevice dev = ctx->pSurf->dev;
+    vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                     VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
+                                     VK_IMAGE_LAYOUT_PREINITIALIZED,&ctx->source);
+    vkh_image_create_descriptor(&ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
+                                VK_SAMPLER_MIPMAP_MODE_NEAREST);
+
+    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                                                              .descriptorPool = dev->descriptorPool,
+                                                              .descriptorSetCount = 1,
+                                                              .pSetLayouts = &dev->descriptorSetLayout };
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->descriptorSet));
+
+    _font_cache_t* cache = (_font_cache_t*)dev->fontCache;
+    VkDescriptorImageInfo descFontTex = { .imageView = cache->cacheTex.pDescriptor->imageView,
+                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                          .sampler = cache->cacheTex.pDescriptor->sampler };
+    VkDescriptorImageInfo descSrcTex = { .imageView = ctx->source.pDescriptor->imageView,
+                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                          .sampler = ctx->source.pDescriptor->sampler };
+
+    VkWriteDescriptorSet writeDescriptorSet[] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ctx->descriptorSet,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &descFontTex
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ctx->descriptorSet,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &descSrcTex
+        }};
+    vkUpdateDescriptorSets(dev->vkDev, 2, &writeDescriptorSet, 0, NULL);
+}
 VkvgContext vkvg_create(VkvgSurface surf)
 {
     VkvgContext ctx = (vkvg_context*)malloc(sizeof(vkvg_context));
 
-    ctx->sizePoints = VKVG_PTS_SIZE;
-    ctx->sizeVertices = VKVG_VBO_SIZE;
-    ctx->sizeIndices = VKVG_IBO_SIZE;
-    ctx->sizePathes = VKVG_PATHES_SIZE;
-    ctx->curPos.x = ctx->curPos.y = 0;
-    ctx->lineWidth = 1;
-    ctx->pSurf = surf;
-    ctx->stencilRef = 0;
+    ctx->sizePoints     = VKVG_PTS_SIZE;
+    ctx->sizeVertices   = VKVG_VBO_SIZE;
+    ctx->sizeIndices    = VKVG_IBO_SIZE;
+    ctx->sizePathes     = VKVG_PATHES_SIZE;
+    ctx->curPos.x       = ctx->curPos.y = 0;
+    ctx->lineWidth      = 1;
+    ctx->pSurf          = surf;
+    ctx->stencilRef     = 0;
 
     ctx->flushFence = vkh_fence_create(ctx->pSurf->dev->vkDev);
 
-    ctx->points = (vec2*)malloc (VKVG_VBO_SIZE*sizeof(vec2));
-    ctx->pathes = (uint32_t*)malloc (VKVG_PATHES_SIZE*sizeof(uint32_t));
+    ctx->points = (vec2*)       malloc (VKVG_VBO_SIZE*sizeof(vec2));
+    ctx->pathes = (uint32_t*)   malloc (VKVG_PATHES_SIZE*sizeof(uint32_t));
 
-    _create_vertices_buff(ctx);
-    _create_cmd_buff(ctx);
-
-    _init_cmd_buff(ctx);
+    _create_vertices_buff   (ctx);
+    _create_cmd_buff        (ctx);
+    _init_source            (ctx);
+    _init_cmd_buff          (ctx);
+    _clear_path             (ctx);
 
     return ctx;
 }
@@ -41,6 +82,7 @@ void vkvg_flush (VkvgContext ctx){
         return;
 
     _flush_cmd_buff(ctx);
+    _init_cmd_buff(ctx);
 
 #ifdef DEBUG
 
@@ -69,11 +111,16 @@ void vkvg_destroy (VkvgContext ctx)
 {
     vkvg_flush(ctx);
 
-    vkDestroyFence(ctx->pSurf->dev->vkDev,ctx->flushFence,NULL);
-    vkFreeCommandBuffers(ctx->pSurf->dev->vkDev, ctx->pSurf->dev->cmdPool, 1, &ctx->cmd);
+    VkDevice dev = ctx->pSurf->dev->vkDev;
+    vkDestroyFence      (dev, ctx->flushFence,NULL);
+    vkFreeCommandBuffers(dev, ctx->pSurf->dev->cmdPool, 1, &ctx->cmd);
 
-    vkvg_buffer_destroy(&ctx->indices);
-    vkvg_buffer_destroy(&ctx->vertices);
+    vkFreeDescriptorSets(dev, ctx->pSurf->dev->descriptorPool,1,&ctx->descriptorSet);
+
+    vkvg_buffer_destroy (&ctx->indices);
+    vkvg_buffer_destroy (&ctx->vertices);
+
+    vkh_image_destroy   (&ctx->source);
 
     free(ctx->pathes);
     free(ctx->points);
@@ -238,7 +285,7 @@ static inline float ecp_zcross (ear_clip_point* p0, ear_clip_point* p1, ear_clip
 void vkvg_clip_preserve (VkvgContext ctx){
     vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineClipping);
     vkvg_fill_preserve(ctx);
-    //vkvg_flush(ctx);
+    vkvg_flush(ctx);
     //should test current operator to bind correct pipeline
     ctx->stencilRef++;
     vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipeline);
@@ -417,10 +464,24 @@ void vkvg_stroke (VkvgContext ctx)
 
 void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
 {
-    ctx->curRGBA.x = r;
-    ctx->curRGBA.y = g;
-    ctx->curRGBA.z = b;
-    ctx->curRGBA.w = a;
+    _flush_cmd_buff(ctx);
+
+    vkh_cmd_begin (ctx->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    VkClearColorValue clr = {r,g,b,a};
+    VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
+
+    set_image_layout        (ctx->cmd, ctx->source.image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    vkCmdClearColorImage    (ctx->cmd, ctx->source.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&clr,1,&range);
+    set_image_layout        (ctx->cmd, ctx->source.image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    vkh_cmd_end                 (ctx->cmd);
+
+    _submit_wait_and_reset_cmd  (ctx);
+    _init_cmd_buff              (ctx);
 }
 void vkvg_set_linewidth (VkvgContext ctx, float width){
     ctx->lineWidth = width;

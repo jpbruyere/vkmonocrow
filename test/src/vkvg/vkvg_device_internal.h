@@ -4,8 +4,10 @@
 #include "vkvg.h"
 
 typedef struct {
+    vec2    screenSize;
     vec2    scale;
     vec2    translate;
+    vec2    scrOffset;
 }push_constants;
 
 typedef struct _vkvg_device_t{
@@ -24,7 +26,6 @@ typedef struct _vkvg_device_t{
     VkPipelineCache			pipelineCache;
     VkPipelineLayout		pipelineLayout;
     VkDescriptorPool		descriptorPool;
-    VkDescriptorSet			descriptorSet;
     VkDescriptorSetLayout	descriptorSetLayout;
 
     int		hdpi,

@@ -443,7 +443,7 @@ void draw(VkEngine* e) {
     }
 }
 void vkvg_test_fill(VkvgContext ctx){
-    vkvg_set_rgba(ctx,0.1,0.1,0.8,0.4);
+    vkvg_set_rgba(ctx,0.1,0.1,0.8,1.0);
     vkvg_move_to(ctx,100,100);
     vkvg_line_to(ctx,400,350);
     vkvg_line_to(ctx,900,150);
@@ -518,36 +518,54 @@ int main(int argc, char *argv[]) {
 
 
     VkvgContext ctx = vkvg_create(surf);
+    /*vkvg_destroy(ctx);
+    ctx = vkvg_create(surf);
+    vkvg_destroy(ctx);
 
-    vkvg_set_rgba(ctx,1,1,1,1);
-    vkvg_rectangle(ctx,100,100,400,400);
-    vkvg_clip(ctx);
+
+    ctx = vkvg_create(surf);*/
+
+    vkvg_set_rgba(ctx,1,1,0,1);
+    vkvg_rectangle(ctx,200,200,400,400);
+    vkvg_stroke (ctx);
+    vkvg_destroy(ctx);
+    ctx = vkvg_create(surf);
+    vkvg_set_rgba(ctx,0,0,1,1);
+    vkvg_rectangle(ctx,300,300,400,400);
+    vkvg_stroke(ctx);
+    //vkvg_clip_preserve(ctx);
+    //vkvg_clip(ctx);
+    //vkvg_fill_preserve(ctx);
+    //vkvg_set_rgba(ctx,1,0,1,1);
+
 
     vkvg_select_font_face(ctx, "/usr/local/share/fonts/DroidSansMono.ttf");
     //vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/unifont/unifont.ttf");
 
-    vkvg_move_to(ctx, 50,50);
+    /*vkvg_move_to(ctx, 50,50);
     vkvg_set_rgba(ctx,0.7,0.7,0.7,1);
-    vkvg_show_text (ctx,"Abracadabra {this} test is ô good");
+    vkvg_show_text (ctx,"Abracadabra {this} test is ô good");*/
 
-    vkvg_test_fill(ctx);
+    //vkvg_test_fill(ctx);
 
-    vkvg_rectangle(ctx,300,300,400,400);
-    vkvg_clip(ctx);
+    //vkvg_rectangle(ctx,300,300,400,400);
+    //vkvg_clip(ctx);
 
 
-    vkvg_test_stroke(ctx);
+    //vkvg_test_stroke(ctx);
 
-    vkvg_reset_clip(ctx);
-    vkvg_set_rgba(ctx,0.7,0.7,0.9,1);
-/*    vkvg_move_to(ctx, 150,250);
+    //vkvg_reset_clip(ctx);
+    /*vkvg_set_rgba(ctx,1.0,0.0,0.0,0.1);
+    vkvg_move_to(ctx, 80,400);
+    vkvg_show_text (ctx,"Ленивый рыжий кот");*/
+
+
+    /*vkvg_move_to(ctx, 150,250);
     vkvg_show_text (ctx,"test string é€");
     vkvg_move_to(ctx, 150,300);
     vkvg_show_text (ctx,"كسول الزنجبيل القط");
     vkvg_move_to(ctx, 150,350);
     vkvg_show_text (ctx,"懶惰的姜貓");*/
-    vkvg_move_to(ctx, 80,400);
-    vkvg_show_text (ctx,"Ленивый рыжий кот");
 
 
     vkvg_destroy(ctx);

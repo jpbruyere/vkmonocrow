@@ -65,18 +65,14 @@ void _add_triangle_indices(vkvg_context* ctx, uint32_t i0, uint32_t i1,uint32_t 
 void _create_cmd_buff (vkvg_context* ctx){
     ctx->cmd = vkh_cmd_buff_create(ctx->pSurf->dev->vkDev, ctx->pSurf->dev->cmdPool,VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 }
-void _record_draw_cmd (vkvg_context* ctx){
+void _record_draw_cmd (VkvgContext ctx){
     if (ctx->indCount == ctx->curIndStart)
         return;
     vkCmdDrawIndexed(ctx->cmd, ctx->indCount - ctx->curIndStart, 1, ctx->curIndStart, 0, 1);
     ctx->curIndStart = ctx->indCount;
 }
 
-void _flush_cmd_buff (vkvg_context* ctx){
-    _record_draw_cmd(ctx);
-
-    vkCmdEndRenderPass (ctx->cmd);
-    vkh_cmd_end (ctx->cmd);
+void _submit_wait_and_reset_cmd (VkvgContext ctx){
     VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
     VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                                  .commandBufferCount = 1,
@@ -88,19 +84,25 @@ void _flush_cmd_buff (vkvg_context* ctx){
                                  .pCommandBuffers = &ctx->cmd};
     VK_CHECK_RESULT(vkQueueSubmit(ctx->pSurf->dev->queue, 1, &submit_info, ctx->flushFence));
     vkWaitForFences(ctx->pSurf->dev->vkDev,1,&ctx->flushFence,VK_TRUE,UINT64_MAX);
+    vkResetFences(ctx->pSurf->dev->vkDev,1,&ctx->flushFence);
     vkResetCommandBuffer(ctx->cmd,0);
-    _init_cmd_buff(ctx);
+}
+
+void _flush_cmd_buff (vkvg_context* ctx){
+    _record_draw_cmd(ctx);
+    vkCmdEndRenderPass (ctx->cmd);
+    vkh_cmd_end (ctx->cmd);
+    _submit_wait_and_reset_cmd(ctx);
 }
 void _init_cmd_buff (vkvg_context* ctx){
-    ctx->pointCount = ctx->vertCount = ctx->indCount = ctx->pathPtr = ctx->totalPoints = ctx->curIndStart = 0;
+    ctx->vertCount = ctx->indCount = ctx->totalPoints = ctx->curIndStart = 0;
 
     VkClearValue clearValues[1] = {{ { 0.0f, 0.0f, 0.0f, 0.0f } }};
     VkRenderPassBeginInfo renderPassBeginInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                                                   .renderPass = ctx->pSurf->dev->renderPass,
                                                   .framebuffer = ctx->pSurf->fb,
                                                   .renderArea.extent = {ctx->pSurf->width,ctx->pSurf->height},
-                                                  .clearValueCount = 1,
-                                                  .pClearValues = clearValues };
+                                                  .clearValueCount = 0};
     vkh_cmd_begin (ctx->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     vkCmdBeginRenderPass (ctx->cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     VkViewport viewport = {0,0,ctx->pSurf->width,ctx->pSurf->height,0,1};
@@ -109,15 +111,22 @@ void _init_cmd_buff (vkvg_context* ctx){
     VkRect2D scissor = {{0,0},{ctx->pSurf->width,ctx->pSurf->height}};
     vkCmdSetScissor(ctx->cmd, 0, 1, &scissor);
 
-    push_constants pc = {{2.0f/(float)ctx->pSurf->width,2.0f/(float)ctx->pSurf->height},{-1.f,-1.f}};
+    push_constants pc = {
+        {(float)ctx->pSurf->width,(float)ctx->pSurf->height},
+        {2.0f/(float)ctx->pSurf->width,2.0f/(float)ctx->pSurf->height},
+        {-1.f,-1.f},
+        {0,0}
+    };
     vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
                        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants),&pc);
+    vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
+                       VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants),&pc);
 
     vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
 
     vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipeline);
     vkCmdBindDescriptorSets(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineLayout,
-                            0, 1, &ctx->pSurf->dev->descriptorSet, 0, NULL);
+                            0, 1, &ctx->descriptorSet, 0, NULL);
     VkDeviceSize offsets[1] = { 0 };
     vkCmdBindVertexBuffers(ctx->cmd, 0, 1, &ctx->vertices.buffer, offsets);
     vkCmdBindIndexBuffer(ctx->cmd, ctx->indices.buffer, 0, VK_INDEX_TYPE_UINT32);

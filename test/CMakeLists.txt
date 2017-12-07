@@ -68,6 +68,8 @@ FOREACH(DATA_FILE ${DATAS})
 ENDFOREACH()
 ADD_CUSTOM_TARGET(DataCopy ALL DEPENDS ${DATAS})
 
+#add_definitions( -DDEBUG_VK_PERF=true )
+
 IF(CMAKE_BUILD_TYPE MATCHES "Debug")
 	SET(CROWDLL_DIR "../crow/build/Debug")
 	#add_definitions( -DDEBUG=true} )
