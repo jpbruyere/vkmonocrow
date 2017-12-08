@@ -97,12 +97,13 @@ void _flush_cmd_buff (vkvg_context* ctx){
 void _init_cmd_buff (vkvg_context* ctx){
     ctx->vertCount = ctx->indCount = ctx->totalPoints = ctx->curIndStart = 0;
 
-    VkClearValue clearValues[1] = {{ { 0.0f, 0.0f, 0.0f, 0.0f } }};
+    VkClearValue clearValues[1] = {{ { 0.0f, 1.0f, 0.0f, 1.0f } }};
     VkRenderPassBeginInfo renderPassBeginInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                                                   .renderPass = ctx->pSurf->dev->renderPass,
                                                   .framebuffer = ctx->pSurf->fb,
                                                   .renderArea.extent = {ctx->pSurf->width,ctx->pSurf->height},
-                                                  .clearValueCount = 0};
+                                                  .clearValueCount = 1,
+                                                  .pClearValues = clearValues};
     vkh_cmd_begin (ctx->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     vkCmdBeginRenderPass (ctx->cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     VkViewport viewport = {0,0,ctx->pSurf->width,ctx->pSurf->height,0,1};
@@ -119,8 +120,8 @@ void _init_cmd_buff (vkvg_context* ctx){
     };
     vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
                        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants),&pc);
-    vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
-                       VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants),&pc);
+    //vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
+    //                   VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants),&pc);
 
     vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
 

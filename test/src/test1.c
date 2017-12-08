@@ -197,7 +197,7 @@ void EngineInit (VkEngine* e) {
 
     VK_CHECK_RESULT(vkCreateInstance (&inst_info, NULL, &e->inst));
 
-    e->phy = vkh_find_phy (e->inst, VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+    e->phy = vkh_find_phy (e->inst, VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
 
     vkGetPhysicalDeviceMemoryProperties(e->phy, &e->memory_properties);
     vkGetPhysicalDeviceProperties(e->phy, &e->gpu_props);
@@ -407,7 +407,7 @@ void buildCommandBuffers(vkh_presenter* r){
                                 .dstOffset = {0,0,0},
                                 .extent = {1024,800,1}};
 
-        vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_GENERAL,
+        vkCmdCopyImage(cb, bltSrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                        1, &cregion);
 
         set_image_layout(cb, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
@@ -524,12 +524,12 @@ int main(int argc, char *argv[]) {
 
 
     ctx = vkvg_create(surf);*/
-
+    vkvg_set_rgba(ctx,0,0,0,1);
+    vkvg_rectangle(ctx,0,0,1024,800);
+    vkvg_fill (ctx);
     vkvg_set_rgba(ctx,1,1,0,1);
     vkvg_rectangle(ctx,200,200,400,400);
-    vkvg_stroke (ctx);
-    vkvg_destroy(ctx);
-    ctx = vkvg_create(surf);
+    vkvg_fill (ctx);
     vkvg_set_rgba(ctx,0,0,1,1);
     vkvg_rectangle(ctx,300,300,400,400);
     vkvg_stroke(ctx);
@@ -542,22 +542,22 @@ int main(int argc, char *argv[]) {
     vkvg_select_font_face(ctx, "/usr/local/share/fonts/DroidSansMono.ttf");
     //vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/unifont/unifont.ttf");
 
-    /*vkvg_move_to(ctx, 50,50);
+    vkvg_move_to(ctx, 50,50);
     vkvg_set_rgba(ctx,0.7,0.7,0.7,1);
-    vkvg_show_text (ctx,"Abracadabra {this} test is ô good");*/
+    vkvg_show_text (ctx,"Abracadabra {this} test is ô good");
 
-    //vkvg_test_fill(ctx);
+    vkvg_test_fill(ctx);
 
     //vkvg_rectangle(ctx,300,300,400,400);
     //vkvg_clip(ctx);
 
 
-    //vkvg_test_stroke(ctx);
+    vkvg_test_stroke(ctx);
 
     //vkvg_reset_clip(ctx);
-    /*vkvg_set_rgba(ctx,1.0,0.0,0.0,0.1);
+    vkvg_set_rgba(ctx,1.0,0.0,0.0,0.1);
     vkvg_move_to(ctx, 80,400);
-    vkvg_show_text (ctx,"Ленивый рыжий кот");*/
+    vkvg_show_text (ctx,"Ленивый рыжий кот");
 
 
     /*vkvg_move_to(ctx, 150,250);

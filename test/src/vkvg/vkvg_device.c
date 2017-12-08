@@ -3,7 +3,6 @@
 #include "vkvg_fonts.h"
 #include "vkvg_device_internal.h"
 
-
 void _create_pipeline_cache     (VkvgDevice dev);
 void _setupRenderPass           (VkvgDevice dev);
 void _setupPipelines            (VkvgDevice dev);
@@ -38,8 +37,8 @@ VkvgDevice vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPh
 
 void vkvg_device_destroy(VkvgDevice dev)
 {
-    vkDestroyDescriptorSetLayout    (dev->vkDev,dev->descriptorSetLayout,NULL);
-    vkDestroyDescriptorPool         (dev->vkDev,dev->descriptorPool,NULL);
+    vkDestroyDescriptorSetLayout    (dev->vkDev, dev->descriptorSetLayout,NULL);
+    vkDestroyDescriptorPool         (dev->vkDev, dev->descriptorPool,NULL);
     vkDestroyPipeline               (dev->vkDev, dev->pipeline, NULL);
     vkDestroyPipeline               (dev->vkDev, dev->pipelineClipping, NULL);
     vkDestroyPipelineLayout         (dev->vkDev, dev->pipelineLayout, NULL);
@@ -67,7 +66,7 @@ void _setupRenderPass(VkvgDevice dev)
     VkAttachmentDescription attColorResolve = {
                     .format = FB_COLOR_FORMAT,
                     .samples = VK_SAMPLE_COUNT_1_BIT,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -77,17 +76,17 @@ void _setupRenderPass(VkvgDevice dev)
                     .format = VK_FORMAT_S8_UINT,
                     .samples = VKVG_SAMPLES,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                    .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
     VkAttachmentDescription attDSResolve = {
                     .format = VK_FORMAT_S8_UINT,
                     .samples = VK_SAMPLE_COUNT_1_BIT,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                     .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
     VkAttachmentDescription attachments[] = {attColor,attColorResolve,attDS,attDSResolve};
@@ -99,7 +98,7 @@ void _setupRenderPass(VkvgDevice dev)
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     VkAttachmentReference dsRef = {
         .attachment = 2,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+        .layout = VK_IMAGE_LAYOUT_GENERAL };
     /*VkAttachmentReference dsResolveRef = {
         .attachment = 3,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };*/
@@ -176,7 +175,7 @@ void _setupPipelines(VkvgDevice dev)
                 .depthTestEnable = VK_FALSE,
                 .depthWriteEnable = VK_FALSE,
                 .depthCompareOp = VK_COMPARE_OP_ALWAYS,
-                .stencilTestEnable = VK_TRUE,
+                .stencilTestEnable = VK_FALSE,
                 .front = clipingOpState,
                 .back = clipingOpState };
 
@@ -196,7 +195,7 @@ void _setupPipelines(VkvgDevice dev)
                 .rasterizationSamples = VKVG_SAMPLES };
     if (VKVG_SAMPLES != VK_SAMPLE_COUNT_1_BIT){
         multisampleState.sampleShadingEnable = VK_TRUE;
-        multisampleState.minSampleShading = 0.0f;
+        multisampleState.minSampleShading = 0.25f;
     }
     VkVertexInputBindingDescription vertexInputBinding = { .binding = 0,
                 .stride = sizeof(Vertex),
@@ -273,11 +272,11 @@ void _createDescriptorSetLayout (VkvgDevice dev) {
 
     VkPushConstantRange pushConstantRange[] = {
         {VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(push_constants)},
-        {VK_SHADER_STAGE_FRAGMENT_BIT,0,sizeof(push_constants)}
+        //{VK_SHADER_STAGE_FRAGMENT_BIT,0,sizeof(push_constants)}
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                                                            .pushConstantRangeCount = 2,
+                                                            .pushConstantRangeCount = 1,
                                                             .pPushConstantRanges = &pushConstantRange,
                                                             .setLayoutCount = 1,
                                                             .pSetLayouts = &dev->descriptorSetLayout };

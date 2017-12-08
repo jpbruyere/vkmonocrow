@@ -20,7 +20,7 @@ void _init_fonts_cache (VkvgDevice dev){
 
     vkh_tex2d_array_create (dev, VK_FORMAT_R8_UNORM, FONT_PAGE_SIZE, FONT_PAGE_SIZE,
                             FONT_CACHE_INIT_LAYERS,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                            VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                            VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                             &cache->cacheTex);
     vkh_image_create_descriptor (&cache->cacheTex, VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT,
                                  VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
@@ -98,7 +98,7 @@ void _upload_font_curPage (VkvgDevice dev){
 
     set_image_layout(cmd, cache->cacheTex.image, VK_IMAGE_ASPECT_COLOR_BIT,
                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     VK_CHECK_RESULT(vkEndCommandBuffer(cmd));
 

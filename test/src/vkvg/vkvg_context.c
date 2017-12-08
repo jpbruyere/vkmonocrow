@@ -15,7 +15,7 @@ void _init_source (VkvgContext ctx){
     VkvgDevice dev = ctx->pSurf->dev;
     vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
-                                     VK_IMAGE_LAYOUT_PREINITIALIZED,&ctx->source);
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,&ctx->source);
     vkh_image_create_descriptor(&ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
                                 VK_SAMPLER_MIPMAP_MODE_NEAREST);
 
@@ -472,7 +472,7 @@ void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
     VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
 
     set_image_layout        (ctx->cmd, ctx->source.image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     vkCmdClearColorImage    (ctx->cmd, ctx->source.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&clr,1,&range);
     set_image_layout        (ctx->cmd, ctx->source.image, VK_IMAGE_ASPECT_COLOR_BIT,
