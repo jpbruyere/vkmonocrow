@@ -4,7 +4,7 @@
 #include "crow.h"
 
 
-vkh_buffer crowBuff = {};
+VkhBuffer crowBuff;
 
 void vkcrow_cmd_copy_create(VkCommandBuffer cmd, VkImage bltDstImage, uint32_t width, uint32_t height){
     vkh_cmd_begin(cmd,VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
@@ -16,7 +16,7 @@ void vkcrow_cmd_copy_create(VkCommandBuffer cmd, VkImage bltDstImage, uint32_t w
     VkBufferImageCopy bufferCopyRegion = { .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
                                            .imageExtent = {width,height,1}};
 
-    vkCmdCopyBufferToImage(cmd, crowBuff.buffer, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
+    vkCmdCopyBufferToImage(cmd, crowBuff->buffer, bltDstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
 
     set_image_layout(cmd, bltDstImage, VK_IMAGE_ASPECT_COLOR_BIT,
                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -36,21 +36,21 @@ void vkcrow_cmd_copy_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphor
                                  .pCommandBuffers = pCmdBuff};
     VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, NULL));
 }
-void vkcrow_resize(vkh_device* pDev, uint32_t width, uint32_t height){
+void vkcrow_resize(VkhDevice pDev, uint32_t width, uint32_t height){
     crow_lock_update_mutex();
     crow_evt_enqueue(crow_evt_create_int32(CROW_RESIZE,width,height));
     vkcrow_terminate();
-    vkh_buffer_create(pDev, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, width * height * 4, &crowBuff);
+    crowBuff = vkh_buffer_create(pDev, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, width * height * 4);
     VK_CHECK_RESULT(vkh_buffer_map(&crowBuff));
     crow_release_update_mutex();
 }
 void vkcrow_buffer_update (){
     crow_lock_update_mutex();
     if (dirtyLength>0){
-        if (dirtyLength+dirtyOffset>crowBuff.size)
-            dirtyLength = crowBuff.size - dirtyOffset;
-        memcpy(crowBuff.mapped + dirtyOffset, crowBmp + dirtyOffset, dirtyLength);
+        if (dirtyLength+dirtyOffset>crowBuff->size)
+            dirtyLength = crowBuff->size - dirtyOffset;
+        memcpy(crowBuff->mapped + dirtyOffset, crowBmp + dirtyOffset, dirtyLength);
         dirtyLength = dirtyOffset = 0;
     }
     crow_release_update_mutex();
@@ -59,8 +59,8 @@ void vkcrow_start(){
     crow_init();
 }
 void vkcrow_terminate(){
-    vkh_buffer_unmap(&crowBuff);
-    vkh_buffer_destroy(&crowBuff);
+    vkh_buffer_unmap(crowBuff);
+    vkh_buffer_destroy(crowBuff);
 }
 void vkcrow_mouse_move(uint32_t x, uint32_t y){
     crow_evt_enqueue(crow_evt_create_int32(CROW_MOUSE_MOVE,x,y));

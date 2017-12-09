@@ -9,10 +9,10 @@ typedef struct _vkvg_surface_t {
     uint32_t	width;
     uint32_t	height;
     VkFramebuffer fb;
-    vkh_image	img;
-    vkh_image	imgMS;
-    vkh_image	stencil;
-    vkh_image	stencilMS;
+    VkhImage	img;
+    VkhImage	imgMS;
+    VkhImage	stencil;
+    VkhImage	stencilMS;
     VkSemaphore semaphore;
     VkCommandBuffer cmd;
 }vkvg_surface;

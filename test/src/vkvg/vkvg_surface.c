@@ -6,7 +6,7 @@ void _clear_depth_stencil(VkvgSurface surf, float depth, uint32_t stencil){
     vkh_cmd_begin(surf->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VkClearDepthStencilValue dsClear = {depth,stencil};
     VkImageSubresourceRange imgSubresRange = {VK_IMAGE_ASPECT_STENCIL_BIT,0,1,0,1};
-    vkCmdClearDepthStencilImage(surf->cmd,surf->stencilMS.image,VK_IMAGE_LAYOUT_GENERAL,&dsClear,1, &imgSubresRange);
+    vkCmdClearDepthStencilImage(surf->cmd,surf->stencilMS->image,VK_IMAGE_LAYOUT_GENERAL,&dsClear,1, &imgSubresRange);
     vkh_cmd_end(surf->cmd);
 
     vkh_cmd_submit_with_semaphores(surf->dev->queue,&surf->cmd,VK_NULL_HANDLE,surf->semaphore,VK_NULL_HANDLE);
@@ -19,28 +19,28 @@ VkvgSurface vkvg_surface_create(VkvgDevice dev, int32_t width, uint32_t height){
     surf->width = width;
     surf->height = height;
 
-    vkh_image_create(dev,FB_COLOR_FORMAT,width,height,VK_IMAGE_TILING_LINEAR,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    surf->img = vkh_image_create(dev,FB_COLOR_FORMAT,width,height,VK_IMAGE_TILING_LINEAR,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT ,
-                                     VK_IMAGE_LAYOUT_GENERAL,&surf->img);
-    vkh_image_create(dev,VK_FORMAT_S8_UINT,width,height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                     VK_IMAGE_LAYOUT_GENERAL);
+    surf->stencil = vkh_image_create(dev,VK_FORMAT_S8_UINT,width,height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT ,
-                                     VK_IMAGE_LAYOUT_GENERAL,&surf->stencil);
+                                     VK_IMAGE_LAYOUT_GENERAL);
 
-    vkh_image_ms_create(dev,FB_COLOR_FORMAT,VKVG_SAMPLES,width,height,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    surf->imgMS = vkh_image_ms_create(dev,FB_COLOR_FORMAT,VKVG_SAMPLES,width,height,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ,
-                                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,&surf->imgMS);
-    vkh_image_ms_create(dev,VK_FORMAT_S8_UINT,VKVG_SAMPLES,width,height,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    surf->stencilMS = vkh_image_ms_create(dev,VK_FORMAT_S8_UINT,VKVG_SAMPLES,width,height,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT ,
-                                     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,&surf->stencilMS);
+                                     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
-    vkh_image_create_descriptor(&surf->img, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
-    vkh_image_create_descriptor(&surf->imgMS, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
-    vkh_image_create_descriptor(&surf->stencil, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_STENCIL_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
-    vkh_image_create_descriptor(&surf->stencilMS, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_STENCIL_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
+    vkh_image_create_descriptor(surf->img, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
+    vkh_image_create_descriptor(surf->imgMS, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
+    vkh_image_create_descriptor(surf->stencil, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_STENCIL_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
+    vkh_image_create_descriptor(surf->stencilMS, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_STENCIL_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
 
     VkImageView attachments[] = {
-        surf->imgMS.pDescriptor->imageView, surf->img.pDescriptor->imageView,
-        surf->stencilMS.pDescriptor->imageView, surf->stencil.pDescriptor->imageView
+        surf->imgMS->pDescriptor->imageView, surf->img->pDescriptor->imageView,
+        surf->stencilMS->pDescriptor->imageView, surf->stencil->pDescriptor->imageView
     };
     VkFramebufferCreateInfo frameBufferCreateInfo = { .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
                                                       .renderPass = dev->renderPass,
@@ -62,14 +62,14 @@ void vkvg_surface_destroy(VkvgSurface surf)
     vkDestroySemaphore(surf->dev->vkDev,surf->semaphore,NULL);
     vkFreeCommandBuffers(surf->dev->vkDev,surf->dev->cmdPool,1,&surf->cmd);
     vkDestroyFramebuffer(surf->dev->vkDev, surf->fb, NULL);
-    vkh_image_destroy(&surf->img);
-    vkh_image_destroy(&surf->imgMS);
-    vkh_image_destroy(&surf->stencil);
-    vkh_image_destroy(&surf->stencilMS);
+    vkh_image_destroy(surf->img);
+    vkh_image_destroy(surf->imgMS);
+    vkh_image_destroy(surf->stencil);
+    vkh_image_destroy(surf->stencilMS);
     free(surf);
 }
 
 VkImage vkvg_surface_get_vk_image(VkvgSurface surf)
 {
-    return surf->img.image;
+    return surf->img->image;
 }

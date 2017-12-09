@@ -32,7 +32,7 @@ typedef struct {
 	uint8_t*		curPage;	//current page data
 	uint8_t			curPageIdx;	//current page index in VkImage array
 	FT_Library		library;
-	vkh_image		cacheTex;	//tex 2d array
+	VkhImage		cacheTex;	//tex 2d array
 	VkFence			uploadFence;
 	_vkvg_font_t*	fonts;
 	uint8_t			fontsCount;

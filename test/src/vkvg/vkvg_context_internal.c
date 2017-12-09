@@ -26,11 +26,11 @@ void _add_curpos (vkvg_context* ctx){
 }
 
 void _create_vertices_buff (vkvg_context* ctx){
-    vkvg_buffer_create ((vkh_device*)ctx->pSurf->dev,
+    vkvg_buffer_create ((VkhDevice*)ctx->pSurf->dev,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         ctx->sizeVertices * sizeof(Vertex), &ctx->vertices);
-    vkvg_buffer_create ((vkh_device*)ctx->pSurf->dev,
+    vkvg_buffer_create ((VkhDevice*)ctx->pSurf->dev,
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         ctx->sizeIndices * sizeof(uint32_t), &ctx->indices);

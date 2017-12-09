@@ -17,7 +17,7 @@ typedef struct _vkvg_context_t {
     VkCommandBuffer cmd;
     VkFence			flushFence;
     uint32_t        stencilRef;
-    vkh_image       source;
+    VkhImage        source;
     VkDescriptorSet	descriptorSet;
 
     //vk buffers, holds data until flush

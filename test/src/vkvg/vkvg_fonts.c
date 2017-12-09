@@ -18,11 +18,10 @@ void _init_fonts_cache (VkvgDevice dev){
 
     assert(!FT_Init_FreeType(&cache->library));
 
-    vkh_tex2d_array_create (dev, VK_FORMAT_R8_UNORM, FONT_PAGE_SIZE, FONT_PAGE_SIZE,
+    cache->cacheTex = vkh_tex2d_array_create (dev, VK_FORMAT_R8_UNORM, FONT_PAGE_SIZE, FONT_PAGE_SIZE,
                             FONT_CACHE_INIT_LAYERS,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                            VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                            &cache->cacheTex);
-    vkh_image_create_descriptor (&cache->cacheTex, VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT,
+                            VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    vkh_image_create_descriptor (cache->cacheTex, VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT,
                                  VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
 
     cache->uploadFence = vkh_fence_create(dev->vkDev);
@@ -50,7 +49,7 @@ void _destroy_font_cache (VkvgDevice dev){
 
     free(cache->fonts);
 
-    vkh_image_destroy (&cache->cacheTex);
+    vkh_image_destroy (cache->cacheTex);
     vkDestroyFence(dev->vkDev,cache->uploadFence,NULL);
     free (dev->fontCache);
 }
@@ -74,29 +73,28 @@ void _dump_glyphs (FT_Face face){
 
 void _upload_font_curPage (VkvgDevice dev){
     _font_cache_t*  cache = (_font_cache_t*)dev->fontCache;
-    vkh_buffer buff = {};
     uint32_t buffLength = FONT_PAGE_SIZE*FONT_PAGE_SIZE*sizeof(uint8_t);
-    vkh_buffer_create(dev,VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    VkhBuffer buff = vkh_buffer_create(dev,VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                      buffLength, &buff);
+                      buffLength);
 
-    vkh_buffer_map(&buff);
-    memcpy(buff.mapped, cache->curPage, buffLength);
-    vkh_buffer_unmap(&buff);
+    vkh_buffer_map(buff);
+    memcpy(buff->mapped, cache->curPage, buffLength);
+    vkh_buffer_unmap(buff);
 
     VkCommandBuffer cmd = vkh_cmd_buff_create(dev->vkDev,dev->cmdPool,VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     vkh_cmd_begin (cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    set_image_layout (cmd, cache->cacheTex.image, VK_IMAGE_ASPECT_COLOR_BIT,
+    set_image_layout (cmd, cache->cacheTex->image, VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
     VkBufferImageCopy bufferCopyRegion = { .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,cache->curPageIdx,1},
                                            .imageExtent = {FONT_PAGE_SIZE,FONT_PAGE_SIZE,1}};
 
-    vkCmdCopyBufferToImage(cmd, buff.buffer, cache->cacheTex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
+    vkCmdCopyBufferToImage(cmd, buff->buffer, cache->cacheTex->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
 
-    set_image_layout(cmd, cache->cacheTex.image, VK_IMAGE_ASPECT_COLOR_BIT,
+    set_image_layout(cmd, cache->cacheTex->image, VK_IMAGE_ASPECT_COLOR_BIT,
                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
@@ -107,7 +105,7 @@ void _upload_font_curPage (VkvgDevice dev){
 
     vkFreeCommandBuffers(dev->vkDev,dev->cmdPool, 1, &cmd);
 
-    vkh_buffer_destroy(&buff);
+    vkh_buffer_destroy(buff);
 }
 
 void _build_face_tex (VkvgDevice dev, const char* name){

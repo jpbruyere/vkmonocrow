@@ -16,8 +16,8 @@ typedef struct{
 
 
 
-vkh_buffer vertices = {};
-vkh_buffer indices = {};
+VkhBuffer vertices;
+VkhBuffer indices;
 uint32_t indicesCount = 0;
 
 VkvgDevice device;

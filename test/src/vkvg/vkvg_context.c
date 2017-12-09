@@ -13,10 +13,10 @@ static uint32_t dlpCount = 0;
 
 void _init_source (VkvgContext ctx){
     VkvgDevice dev = ctx->pSurf->dev;
-    vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    ctx->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,&ctx->source);
-    vkh_image_create_descriptor(&ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    vkh_image_create_descriptor(ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
                                 VK_SAMPLER_MIPMAP_MODE_NEAREST);
 
     VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -26,12 +26,12 @@ void _init_source (VkvgContext ctx){
     VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->descriptorSet));
 
     _font_cache_t* cache = (_font_cache_t*)dev->fontCache;
-    VkDescriptorImageInfo descFontTex = { .imageView = cache->cacheTex.pDescriptor->imageView,
+    VkDescriptorImageInfo descFontTex = { .imageView = cache->cacheTex->pDescriptor->imageView,
                                           .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                          .sampler = cache->cacheTex.pDescriptor->sampler };
-    VkDescriptorImageInfo descSrcTex = { .imageView = ctx->source.pDescriptor->imageView,
+                                          .sampler = cache->cacheTex->pDescriptor->sampler };
+    VkDescriptorImageInfo descSrcTex = { .imageView = ctx->source->pDescriptor->imageView,
                                           .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                          .sampler = ctx->source.pDescriptor->sampler };
+                                          .sampler = ctx->source->pDescriptor->sampler };
 
     VkWriteDescriptorSet writeDescriptorSet[] = {
         {
@@ -120,7 +120,7 @@ void vkvg_destroy (VkvgContext ctx)
     vkvg_buffer_destroy (&ctx->indices);
     vkvg_buffer_destroy (&ctx->vertices);
 
-    vkh_image_destroy   (&ctx->source);
+    vkh_image_destroy   (ctx->source);
 
     free(ctx->pathes);
     free(ctx->points);
@@ -471,11 +471,11 @@ void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
     VkClearColorValue clr = {r,g,b,a};
     VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
 
-    set_image_layout        (ctx->cmd, ctx->source.image, VK_IMAGE_ASPECT_COLOR_BIT,
+    set_image_layout        (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    vkCmdClearColorImage    (ctx->cmd, ctx->source.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&clr,1,&range);
-    set_image_layout        (ctx->cmd, ctx->source.image, VK_IMAGE_ASPECT_COLOR_BIT,
+    vkCmdClearColorImage    (ctx->cmd, ctx->source->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&clr,1,&range);
+    set_image_layout        (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     vkh_cmd_end                 (ctx->cmd);
