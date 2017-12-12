@@ -6,37 +6,37 @@
 #include <stdbool.h>
 
 typedef struct {
-	float x;
-	float y;
+    float x;
+    float y;
 }vec2;
 typedef struct {
-	double x;
-	double y;
+    double x;
+    double y;
 }vec2d;
 
 typedef struct {
-	float x;
-	float y;
-	float z;
+    float x;
+    float y;
+    float z;
 }vec3;
 
 typedef struct {
-	float x;
-	float y;
-	float z;
-	float w;
+    float x;
+    float y;
+    float z;
+    float w;
 }vec4;
 
 typedef struct {
-	uint16_t x;
-	uint16_t y;
-	uint16_t z;
-	uint16_t w;
+    uint16_t x;
+    uint16_t y;
+    uint16_t z;
+    uint16_t w;
 }vec4i16;
 
 typedef struct {
-	uint16_t x;
-	uint16_t y;
+    int16_t x;
+    int16_t y;
 }vec2i16;
 
 float		vec2_length	(vec2 v);

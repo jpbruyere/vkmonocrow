@@ -16,6 +16,8 @@ void _init_fonts_cache (VkvgDevice dev){
     _font_cache_t fc = {};
     *cache = fc;
 
+    cache->config = FcInitLoadConfigAndFonts();
+
     assert(!FT_Init_FreeType(&cache->library));
 
     cache->cacheTex = vkh_tex2d_array_create (dev, VK_FORMAT_R8_UNORM, FONT_PAGE_SIZE, FONT_PAGE_SIZE,
@@ -30,6 +32,9 @@ void _init_fonts_cache (VkvgDevice dev){
 }
 void _destroy_font_cache (VkvgDevice dev){
     _font_cache_t* cache = (_font_cache_t*)dev->fontCache;
+
+    //FcFini();
+
     if (cache->curPage != NULL)
         free (cache->curPage);
 
@@ -194,19 +199,44 @@ void _build_face_tex (VkvgDevice dev, const char* name){
     cache->curPage = data;
 }
 
+void _fc_search_font(_font_cache_t* fc, const char* name, char** fontFile){
+
+
+}
 void _select_font_face (VkvgContext ctx, const char* name){
     _font_cache_t*  cache = (_font_cache_t*)ctx->pSurf->dev->fontCache;
 
-    _build_face_tex(ctx->pSurf->dev, name);
+    char* fontFile;
+
+    //make pattern from font name
+    FcPattern* pat = FcNameParse((const FcChar8*)name);
+    FcConfigSubstitute(cache->config, pat, FcMatchPattern);
+    FcDefaultSubstitute(pat);
+    // find the font
+    FcResult result;
+    FcPattern* font = FcFontMatch(cache->config, pat, &result);
+    if (font)
+    {
+        if (FcPatternGetString(font, FC_FILE, 0, (FcChar8 **)&fontFile) == FcResultMatch)
+        {
+            printf("FONT PATH: %s\n",fontFile);
+        }
+    }
+
+    _build_face_tex(ctx->pSurf->dev, fontFile);
+
+    FcPatternDestroy(pat);
+    FcPatternDestroy(font);
 
     ctx->curFont =  &cache->fonts[cache->fontsCount-1];
 }
+
 void _show_texture (vkvg_context* ctx){
     Vertex vs[] = {
-        {{0,0},      {1,1,1,1},{0,0,0}},
-        {{0,2048},    {1,1,1,1},{0,1,0}},
-        {{2048,0},   {1,1,1,1},{1,0,0}},
-        {{2048,2048}, {1,1,1,1},{1,1,0}}
+        {{0,0},                             {1,1,1,1},{0,0,0}},
+        {{0,FONT_PAGE_SIZE},                {1,1,1,1},{0,1,0}},
+        {{FONT_PAGE_SIZE,0},                {1,1,1,1},{1,0,0}},
+        {{FONT_PAGE_SIZE,FONT_PAGE_SIZE},   {1,1,1,1},{1,1,0}}
     };
 
     _add_vertex(ctx,vs[0]);

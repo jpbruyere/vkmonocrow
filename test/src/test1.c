@@ -9,23 +9,8 @@
 
 #include "vkvg/vkvg.h"
 
-typedef struct{
-    float position[3];
-    float color[3];
-}Vertex;
-
-
-
-VkhBuffer vertices;
-VkhBuffer indices;
-uint32_t indicesCount = 0;
-
 VkvgDevice device;
 VkvgSurface surf = NULL;
-
-VkPipeline pipeline;
-VkPipelineCache pipelineCache;
-VkPipelineLayout pipelineLayout;
 
 void vke_swapchain_destroy (vkh_presenter* r);
 void vke_swapchain_create (VkEngine* e);
@@ -86,7 +71,6 @@ void vke_swapchain_create (VkEngine* e){
             r->width = surfCapabilities.minImageExtent.width;
         else if (r->width > surfCapabilities.maxImageExtent.width)
             r->width = surfCapabilities.maxImageExtent.width;
-
         if (r->height < surfCapabilities.minImageExtent.height)
             r->height = surfCapabilities.minImageExtent.height;
         else if (r->height > surfCapabilities.maxImageExtent.height)
@@ -164,52 +148,7 @@ VkSampleCountFlagBits getMaxUsableSampleCount(VkSampleCountFlags counts)
     return VK_SAMPLE_COUNT_1_BIT;
 }
 
-void EngineInit (VkEngine* e) {
-    glfwInit();
-    assert (glfwVulkanSupported()==GLFW_TRUE);
-    e->ExtensionNames = glfwGetRequiredInstanceExtensions (&e->EnabledExtensionsCount);
-
-
-    e->infos.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    e->infos.pNext = NULL;
-    e->infos.pApplicationName = APP_SHORT_NAME;
-    e->infos.applicationVersion = 1;
-    e->infos.pEngineName = APP_SHORT_NAME;
-    e->infos.engineVersion = 1;
-    e->infos.apiVersion = VK_API_VERSION_1_0;
-    e->renderer.width = 1024;
-    e->renderer.height = 800;
-
-    const uint32_t enabledLayersCount = 1;
-
-    //const char* enabledLayers[] = {"VK_LAYER_LUNARG_core_validation"};
-    const char* enabledExtentions[] = {"VK_KHR_surface", "VK_KHR_swapchain"};
-    const char* enabledLayers[] = {"VK_LAYER_LUNARG_standard_validation"};
-
-    VkInstanceCreateInfo inst_info = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-                                       .pNext = NULL,
-                                       .flags = 0,
-                                       .pApplicationInfo = &e->infos,
-                                       .enabledExtensionCount = e->EnabledExtensionsCount,
-                                       .ppEnabledExtensionNames = e->ExtensionNames,
-                                       .enabledLayerCount = enabledLayersCount,
-                                       .ppEnabledLayerNames = enabledLayers };
-
-    VK_CHECK_RESULT(vkCreateInstance (&inst_info, NULL, &e->inst));
-
-    e->phy = vkh_find_phy (e->inst, VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
-
-    vkGetPhysicalDeviceMemoryProperties(e->phy, &e->memory_properties);
-    vkGetPhysicalDeviceProperties(e->phy, &e->gpu_props);
-
-    /*VkImageFormatProperties imgProps = {};
-    vkGetPhysicalDeviceImageFormatProperties(e->phy,
-                                             VK_FORMAT_R8_UNORM,
-                                             VK_IMAGE_TYPE_2D,
-                                             VK_IMAGE_TILING_OPTIMAL,
-                                             VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                             NULL,&imgProps );*/
-
+void vkengine_DumpInfos (VkEngine* e){
     printf("max samples = %d\n", getMaxUsableSampleCount(e->gpu_props.limits.framebufferColorSampleCounts));
     printf("max tex2d size = %d\n", e->gpu_props.limits.maxImageDimension2D);
     printf("max tex array layers = %d\n", e->gpu_props.limits.maxImageArrayLayers);
@@ -235,7 +174,54 @@ void EngineInit (VkEngine* e) {
             printf("VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT|");
         printf("\n");
     }
+}
 
+void EngineInit (VkEngine* e) {
+    glfwInit();
+    assert (glfwVulkanSupported()==GLFW_TRUE);
+    e->ExtensionNames = glfwGetRequiredInstanceExtensions (&e->EnabledExtensionsCount);
+
+
+    e->infos.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    e->infos.pNext = NULL;
+    e->infos.pApplicationName = APP_SHORT_NAME;
+    e->infos.applicationVersion = 1;
+    e->infos.pEngineName = APP_SHORT_NAME;
+    e->infos.engineVersion = 1;
+    e->infos.apiVersion = VK_API_VERSION_1_0;
+    e->renderer.width = 1024;
+    e->renderer.height = 800;
+
+    const uint32_t enabledLayersCount = 1;
+
+    //const char* enabledLayers[] = {"VK_LAYER_LUNARG_core_validation"};
+    const char* enabledExtentions[] = {"VK_KHR_surface", "VK_KHR_swapchain","VK_KHR_xcb_surface"};
+    const char* enabledLayers[] = {"VK_LAYER_LUNARG_standard_validation"};
+
+    VkInstanceCreateInfo inst_info = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+                                       .pNext = NULL,
+                                       .flags = 0,
+                                       .pApplicationInfo = &e->infos,
+                                       .enabledExtensionCount = e->EnabledExtensionsCount,
+                                       .ppEnabledExtensionNames = e->ExtensionNames,
+                                       .enabledLayerCount = enabledLayersCount,
+                                       .ppEnabledLayerNames = enabledLayers };
+
+    VK_CHECK_RESULT(vkCreateInstance (&inst_info, NULL, &e->inst));
+
+    e->phy = vkh_find_phy (e->inst, VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+                           );
+
+    vkGetPhysicalDeviceMemoryProperties(e->phy, &e->memory_properties);
+    vkGetPhysicalDeviceProperties(e->phy, &e->gpu_props);
+
+    /*VkImageFormatProperties imgProps = {};
+    vkGetPhysicalDeviceImageFormatProperties(e->phy,
+                                             VK_FORMAT_R8_UNORM,
+                                             VK_IMAGE_TYPE_2D,
+                                             VK_IMAGE_TILING_OPTIMAL,
+                                             VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                             NULL,&imgProps );*/
 
     uint32_t queue_family_count = 0;
     int cQueue = -1, gQueue = -1, tQueue = -1;
@@ -322,9 +308,9 @@ void EngineInit (VkEngine* e) {
     assert (glfwGetPhysicalDevicePresentationSupport (e->inst, e->phy, gQueue)==GLFW_TRUE);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-    glfwWindowHint(GLFW_FLOATING, GLFW_FALSE);
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE,  GLFW_TRUE);
+    glfwWindowHint(GLFW_FLOATING,   GLFW_FALSE);
+    glfwWindowHint(GLFW_DECORATED,  GLFW_FALSE);
 
     vkh_presenter* r = &e->renderer;
     r->dev = e->dev;
@@ -539,12 +525,14 @@ int main(int argc, char *argv[]) {
     //vkvg_set_rgba(ctx,1,0,1,1);
 
 
-    vkvg_select_font_face(ctx, "/usr/local/share/fonts/DroidSansMono.ttf");
+    //vkvg_select_font_face(ctx, "/usr/local/share/fonts/DroidSansMono.ttf");
+    vkvg_select_font_face(ctx, "times:italic");
     //vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/unifont/unifont.ttf");
 
     vkvg_move_to(ctx, 50,50);
     vkvg_set_rgba(ctx,0.7,0.7,0.7,1);
-    vkvg_show_text (ctx,"Abracadabra {this} test is ô good");
+    vkvg_show_text (ctx,"BR abcdefghijklmnopqrstuvwxyz Abracadabra {this} test is ô good");
+    //vkvg_show_text (ctx,"j");
 
     vkvg_test_fill(ctx);
 
