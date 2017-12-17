@@ -1,6 +1,7 @@
 #ifndef SURFACE_INTERNAL_H
 #define SURFACE_INTERNAL_H
 
+#include "vkvg_internal.h"
 #include "vkvg.h"
 #include "vkh_image.h"
 

@@ -194,9 +194,9 @@ void EngineInit (VkEngine* e) {
 
     const uint32_t enabledLayersCount = 1;
 
-    //const char* enabledLayers[] = {"VK_LAYER_LUNARG_core_validation"};
+    const char* enabledLayers[] = {"VK_LAYER_LUNARG_core_validation"};
     const char* enabledExtentions[] = {"VK_KHR_surface", "VK_KHR_swapchain","VK_KHR_xcb_surface"};
-    const char* enabledLayers[] = {"VK_LAYER_LUNARG_standard_validation"};
+    //const char* enabledLayers[] = {"VK_LAYER_LUNARG_standard_validation"};
 
     VkInstanceCreateInfo inst_info = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
                                        .pNext = NULL,
@@ -204,7 +204,7 @@ void EngineInit (VkEngine* e) {
                                        .pApplicationInfo = &e->infos,
                                        .enabledExtensionCount = e->EnabledExtensionsCount,
                                        .ppEnabledExtensionNames = e->ExtensionNames,
-                                       .enabledLayerCount = enabledLayersCount,
+                                       .enabledLayerCount = 1,
                                        .ppEnabledLayerNames = enabledLayers };
 
     VK_CHECK_RESULT(vkCreateInstance (&inst_info, NULL, &e->inst));
@@ -510,7 +510,7 @@ int main(int argc, char *argv[]) {
 
 
     ctx = vkvg_create(surf);*/
-    vkvg_set_rgba(ctx,0,0,0,1);
+    vkvg_set_rgba(ctx,0.01,0,0,1);
     vkvg_rectangle(ctx,0,0,1024,800);
     vkvg_fill (ctx);
     vkvg_set_rgba(ctx,1,1,0,1);
@@ -526,26 +526,66 @@ int main(int argc, char *argv[]) {
 
 
     //vkvg_select_font_face(ctx, "/usr/local/share/fonts/DroidSansMono.ttf");
-    vkvg_select_font_face(ctx, "times:italic");
+
     //vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/unifont/unifont.ttf");
 
-    vkvg_move_to(ctx, 50,50);
+    int size = 100;
+    int penY = 50;
+    int penX = 10;
+
+    vkvg_set_font_size(ctx,size-10);
+    vkvg_select_font_face(ctx, "droid");
+    vkvg_move_to(ctx, penX,penY);
     vkvg_set_rgba(ctx,0.7,0.7,0.7,1);
-    vkvg_show_text (ctx,"BR abcdefghijklmnopqrstuvwxyz Abracadabra {this} test is ô good");
+    vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
+    penY+=size;
+
+    vkvg_select_font_face(ctx, "times");
+    vkvg_move_to(ctx, penX,penY);
+    vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
+    penY+=size;
+
+    vkvg_select_font_face(ctx, "times:bold");
+    vkvg_move_to(ctx, penX,penY);
+    vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
+    penY+=size;
+
+    vkvg_select_font_face(ctx, "droid");
+    vkvg_move_to(ctx, penX,penY);
+    vkvg_show_text (ctx,"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    penY+=size;
+
+    vkvg_select_font_face(ctx, "arial:italic");
+    vkvg_move_to(ctx, penX,penY);
+    vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
+    penY+=size;
+
+
+    vkvg_select_font_face(ctx, "arial");
+    vkvg_move_to(ctx, penX,penY);
+    vkvg_show_text (ctx,"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    penY+=size;
+
+    vkvg_select_font_face(ctx, "mono");
+    vkvg_move_to(ctx, penX,penY);
+    vkvg_show_text (ctx,"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    penY+=size;
+
+    //vkvg_show_text (ctx,"ABCDABCD");
     //vkvg_show_text (ctx,"j");
 
-    vkvg_test_fill(ctx);
+    //vkvg_test_fill(ctx);
 
     //vkvg_rectangle(ctx,300,300,400,400);
     //vkvg_clip(ctx);
 
 
-    vkvg_test_stroke(ctx);
+    //vkvg_test_stroke(ctx);
 
     //vkvg_reset_clip(ctx);
-    vkvg_set_rgba(ctx,1.0,0.0,0.0,0.1);
+    /*vkvg_set_rgba(ctx,1.0,0.0,0.0,0.1);
     vkvg_move_to(ctx, 80,400);
-    vkvg_show_text (ctx,"Ленивый рыжий кот");
+    vkvg_show_text (ctx,"Ленивый рыжий кот");*/
 
 
     /*vkvg_move_to(ctx, 150,250);

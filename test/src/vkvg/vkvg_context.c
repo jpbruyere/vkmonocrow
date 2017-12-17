@@ -2,10 +2,6 @@
 #include "vkvg_context_internal.h"
 #include "vkvg_surface_internal.h"
 
-
-#include "vkvg_fonts.h"
-#include "vectors.h"
-
 #ifdef DEBUG
 static vec2 debugLinePoints[1000];
 static uint32_t dlpCount = 0;
@@ -53,7 +49,7 @@ void _init_source (VkvgContext ctx){
 }
 VkvgContext vkvg_create(VkvgSurface surf)
 {
-    VkvgContext ctx = (vkvg_context*)malloc(sizeof(vkvg_context));
+    VkvgContext ctx = (vkvg_context*)calloc(1, sizeof(vkvg_context));
 
     ctx->sizePoints     = VKVG_PTS_SIZE;
     ctx->sizeVertices   = VKVG_VBO_SIZE;
@@ -63,6 +59,8 @@ VkvgContext vkvg_create(VkvgSurface surf)
     ctx->lineWidth      = 1;
     ctx->pSurf          = surf;
     ctx->stencilRef     = 0;
+
+    ctx->selectedFont.fontFile = (char*)calloc(FONT_FILE_NAME_MAX_SIZE,sizeof(char));
 
     ctx->flushFence = vkh_fence_create(ctx->pSurf->dev->vkDev);
 
@@ -122,6 +120,7 @@ void vkvg_destroy (VkvgContext ctx)
 
     vkh_image_destroy   (ctx->source);
 
+    free(ctx->selectedFont.fontFile);
     free(ctx->pathes);
     free(ctx->points);
     free(ctx);
@@ -492,14 +491,14 @@ void vkvg_select_font_face (VkvgContext ctx, const char* name){
 
     _select_font_face (ctx, name);
 }
+void vkvg_set_font_size (VkvgContext ctx, uint32_t size){
+    _set_font_size (ctx,size);
+}
 
 void vkvg_set_text_direction (vkvg_context* ctx, VkvgDirection direction){
 
 }
 
-void vkvg_set_font_size (VkvgContext ctx, uint32_t size){
-
-}
 void vkvg_show_text (VkvgContext ctx, const char* text){
     _show_text(ctx,text);
     _record_draw_cmd(ctx);

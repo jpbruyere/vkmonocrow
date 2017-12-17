@@ -1,7 +1,9 @@
 #ifndef VKVG_DEVICE_INTERNAL_H
 #define VKVG_DEVICE_INTERNAL_H
 
+#include "vkvg_internal.h"
 #include "vkvg.h"
+#include "vkvg_fonts.h"
 
 typedef struct {
     vec2    screenSize;
@@ -31,7 +33,7 @@ typedef struct _vkvg_device_t{
     int		hdpi,
             vdpi;
 
-    void*	fontCache;
+    _font_cache_t*	fontCache;
 
 }vkvg_device;
 #endif

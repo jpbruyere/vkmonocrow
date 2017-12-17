@@ -1,7 +1,5 @@
-﻿#include "vkvg.h"
-#include "vkvg_internal.h"
-#include "vkvg_fonts.h"
-#include "vkvg_device_internal.h"
+﻿#include "vkvg_device_internal.h"
+#include "vkvg_context_internal.h"
 
 void _create_pipeline_cache     (VkvgDevice dev);
 void _setupRenderPass           (VkvgDevice dev);
@@ -13,8 +11,8 @@ VkvgDevice vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPh
 {
     VkvgDevice dev = (vkvg_device*)malloc(sizeof(vkvg_device));
 
-    dev->hdpi = 72;
-    dev->vdpi = 72;
+    dev->hdpi = 96;
+    dev->vdpi = 96;
 
     dev->vkDev = vkdev;
     dev->phyMemProps = memprops;
@@ -59,9 +57,9 @@ void _setupRenderPass(VkvgDevice dev)
                     .format = FB_COLOR_FORMAT,
                     .samples = VKVG_SAMPLES,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                    .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     VkAttachmentDescription attColorResolve = {
                     .format = FB_COLOR_FORMAT,
@@ -196,6 +194,8 @@ void _setupPipelines(VkvgDevice dev)
     if (VKVG_SAMPLES != VK_SAMPLE_COUNT_1_BIT){
         multisampleState.sampleShadingEnable = VK_TRUE;
         multisampleState.minSampleShading = 0.25f;
+        multisampleState.alphaToCoverageEnable = VK_FALSE;
+        multisampleState.alphaToOneEnable = VK_FALSE;
     }
     VkVertexInputBindingDescription vertexInputBinding = { .binding = 0,
                 .stride = sizeof(Vertex),
