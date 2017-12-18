@@ -75,11 +75,13 @@ void vkvg_stroke			(VkvgContext ctx);
 void vkvg_stroke_preserve	(VkvgContext ctx);
 void vkvg_fill				(VkvgContext ctx);
 void vkvg_fill_preserve		(VkvgContext ctx);
+void vkvg_paint             (VkvgContext ctx);
 void vkvg_reset_clip        (VkvgContext ctx);
 void vkvg_clip              (VkvgContext ctx);
 void vkvg_clip_preserve     (VkvgContext ctx);
 void vkvg_set_rgba			(VkvgContext ctx, float r, float g, float b, float a);
 void vkvg_set_linewidth		(VkvgContext ctx, float width);
+void vkvg_set_source_surface(VkvgContext ctx, VkvgSurface surf, float x, float y);
 
 void vkvg_select_font_face	(VkvgContext ctx, const char* name);
 void vkvg_set_font_size		(VkvgContext ctx, uint32_t size);

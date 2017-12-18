@@ -495,6 +495,7 @@ int main(int argc, char *argv[]) {
     EngineInit(&e);
 
     device = vkvg_device_create(e.dev, e.renderer.queue, e.renderer.qFam, e.memory_properties);
+
     surf = vkvg_surface_create (device,1024,800);
 
     vkeCheckPhyPropBlitSource (&e);
@@ -502,8 +503,8 @@ int main(int argc, char *argv[]) {
 
     vke_swapchain_create(&e);
 
-
-    VkvgContext ctx = vkvg_create(surf);
+    VkvgSurface surf2 = vkvg_surface_create (device,800,800);;
+    VkvgContext ctx = vkvg_create(surf2);
     /*vkvg_destroy(ctx);
     ctx = vkvg_create(surf);
     vkvg_destroy(ctx);
@@ -581,13 +582,13 @@ int main(int argc, char *argv[]) {
     //vkvg_show_text (ctx,"ABCDABCD");
     //vkvg_show_text (ctx,"j");
 
-    //vkvg_test_fill(ctx);
+    vkvg_test_fill(ctx);
 
     //vkvg_rectangle(ctx,300,300,400,400);
     //vkvg_clip(ctx);
 
 
-    //vkvg_test_stroke(ctx);
+    vkvg_test_stroke(ctx);
 
     //vkvg_reset_clip(ctx);
     /*vkvg_set_rgba(ctx,1.0,0.0,0.0,0.1);
@@ -601,6 +602,17 @@ int main(int argc, char *argv[]) {
     vkvg_show_text (ctx,"كسول الزنجبيل القط");
     vkvg_move_to(ctx, 150,350);
     vkvg_show_text (ctx,"懶惰的姜貓");*/
+
+
+    vkvg_destroy(ctx);
+
+    ctx = vkvg_create(surf);
+
+    vkvg_set_source_surface(ctx, surf2, 100, 100);
+    //vkvg_set_rgba(ctx,0.01,0,0,1);
+    //vkvg_rectangle(ctx,0,0,400,800);
+    //vkvg_fill (ctx);
+    vkvg_paint(ctx);
 
 
     vkvg_destroy(ctx);

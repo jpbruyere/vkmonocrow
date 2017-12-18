@@ -477,6 +477,23 @@ void vkvg_stroke (VkvgContext ctx)
     vkvg_stroke_preserve(ctx);
     _clear_path(ctx);
 }
+void _vkvg_fill_rectangle (VkvgContext ctx, float x, float y, float width, float height){
+    Vertex v[4] =
+    {
+        {{x,y},             {},{0,0,-1}},
+        {{x,y+height},      {},{0,0,-1}},
+        {{x+width,y},       {},{0,0,-1}},
+        {{x+width,y+height},{},{0,0,-1}}
+    };
+    uint32_t firstIdx = ctx->vertCount;
+    Vertex* pVert = (Vertex*)(ctx->vertices.mapped + ctx->vertCount * sizeof(Vertex));
+    memcpy (pVert,v,4*sizeof(Vertex));
+    ctx->vertCount+=4;
+    _add_tri_indices_for_rect(ctx, firstIdx);
+}
+void vkvg_paint (VkvgContext ctx){
+    _vkvg_fill_rectangle (ctx, 0, 0, ctx->pSurf->width, ctx->pSurf->height);
+}
 
 void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
 {
@@ -499,6 +516,41 @@ void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
     _submit_wait_and_reset_cmd  (ctx);
     _init_cmd_buff              (ctx);
 }
+void vkvg_set_source_surface(VkvgContext ctx, VkvgSurface surf, float x, float y){
+    _flush_cmd_buff(ctx);
+
+    vkh_cmd_begin (ctx->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    set_image_layout        (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout        (ctx->cmd, surf->img->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    VkImageBlit firstMipBlit = {
+        .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+        .srcOffsets = {{0,0,0},{surf->width,surf->height,1}},
+        .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+        .dstOffsets = {{x,y,0},{surf->width+x,surf->height+y,1}}
+    };
+
+    vkCmdBlitImage(ctx->cmd,surf->img->image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   ctx->source->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1,&firstMipBlit,VK_SAMPLER_MIPMAP_MODE_NEAREST);
+
+    set_image_layout        (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout        (ctx->cmd, surf->img->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    vkh_cmd_end                 (ctx->cmd);
+
+    _submit_wait_and_reset_cmd  (ctx);
+    _init_cmd_buff              (ctx);
+}
+
 void vkvg_set_linewidth (VkvgContext ctx, float width){
     ctx->lineWidth = width;
 }

@@ -65,6 +65,7 @@ void _check_pathes_array	(VkvgContext ctx);
 void _add_point				(VkvgContext ctx, float x, float y);
 void _add_point_v2			(VkvgContext ctx, vec2 v);
 void _add_curpos			(VkvgContext ctx);
+void _vkvg_fill_rectangle   (VkvgContext ctx, float x, float y, float width, float height);
 
 void _create_vertices_buff	(VkvgContext ctx);
 void _add_vertex			(VkvgContext ctx, Vertex v);
