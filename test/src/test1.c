@@ -529,7 +529,7 @@ int main(int argc, char *argv[]) {
 
     //vkvg_select_font_face(ctx, "/usr/share/fonts/truetype/unifont/unifont.ttf");
 
-    int size = 100;
+    int size = 19;
     int penY = 50;
     int penX = 10;
 
@@ -537,7 +537,7 @@ int main(int argc, char *argv[]) {
     vkvg_select_font_face(ctx, "droid");
     vkvg_move_to(ctx, penX,penY);
     vkvg_set_rgba(ctx,0.7,0.7,0.7,1);
-    vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
+    vkvg_show_text (ctx,"abcdefghijk");
     penY+=size;
 
     vkvg_select_font_face(ctx, "times");
@@ -545,10 +545,17 @@ int main(int argc, char *argv[]) {
     vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
     penY+=size;
 
+    vkvg_select_font_face(ctx, "droid");
+    vkvg_move_to(ctx, penX,penY);
+    vkvg_set_rgba(ctx,0.7,0.7,0.7,1);
+    vkvg_show_text (ctx,"lmnopqrstuvwxyz123456789");
+    penY+=size;
+
     vkvg_select_font_face(ctx, "times:bold");
     vkvg_move_to(ctx, penX,penY);
     vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
     penY+=size;
+
 
     vkvg_select_font_face(ctx, "droid");
     vkvg_move_to(ctx, penX,penY);

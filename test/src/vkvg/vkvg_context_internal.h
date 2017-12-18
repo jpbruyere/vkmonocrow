@@ -20,6 +20,9 @@ typedef struct{
 }Vertex;
 
 typedef struct _vkvg_context_t {
+    VkvgContext     pPrev;      //double linked list of contexts
+    VkvgContext     pNext;
+
     VkvgSurface		pSurf;
     VkCommandBuffer cmd;
     VkFence			flushFence;
@@ -80,4 +83,5 @@ void _clear_path			(VkvgContext ctx);
 bool _path_is_closed		(VkvgContext ctx, uint32_t ptrPath);
 uint32_t _get_last_point_of_closed_path (VkvgContext ctx, uint32_t ptrPath);
 
+void _update_descriptor_sets(VkvgDevice dev, VkvgContext ctx, _font_cache_t* cache);
 #endif

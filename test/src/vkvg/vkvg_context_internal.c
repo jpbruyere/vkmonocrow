@@ -89,6 +89,10 @@ void _submit_wait_and_reset_cmd (VkvgContext ctx){
 }
 
 void _flush_cmd_buff (VkvgContext ctx){
+    if (ctx->indCount == 0){
+        vkResetCommandBuffer(ctx->cmd,0);
+        return;
+    }
     _record_draw_cmd(ctx);
     vkCmdEndRenderPass (ctx->cmd);
     vkh_cmd_end (ctx->cmd);

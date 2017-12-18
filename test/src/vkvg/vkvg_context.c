@@ -7,21 +7,7 @@ static vec2 debugLinePoints[1000];
 static uint32_t dlpCount = 0;
 #endif
 
-void _init_source (VkvgContext ctx){
-    VkvgDevice dev = ctx->pSurf->dev;
-    ctx->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                     VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    vkh_image_create_descriptor(ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
-                                VK_SAMPLER_MIPMAP_MODE_NEAREST);
-
-    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                                                              .descriptorPool = dev->descriptorPool,
-                                                              .descriptorSetCount = 1,
-                                                              .pSetLayouts = &dev->descriptorSetLayout };
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->descriptorSet));
-
-    _font_cache_t* cache = (_font_cache_t*)dev->fontCache;
+void _update_descriptor_sets (VkvgDevice dev, VkvgContext ctx, _font_cache_t* cache){
     VkDescriptorImageInfo descFontTex = { .imageView = cache->cacheTex->pDescriptor->imageView,
                                           .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
                                           .sampler = cache->cacheTex->pDescriptor->sampler };
@@ -47,6 +33,22 @@ void _init_source (VkvgContext ctx){
         }};
     vkUpdateDescriptorSets(dev->vkDev, 2, &writeDescriptorSet, 0, NULL);
 }
+void _init_source (VkvgContext ctx){
+    VkvgDevice dev = ctx->pSurf->dev;
+    ctx->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                     VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    vkh_image_create_descriptor(ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
+                                VK_SAMPLER_MIPMAP_MODE_NEAREST);
+
+    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                                                              .descriptorPool = dev->descriptorPool,
+                                                              .descriptorSetCount = 1,
+                                                              .pSetLayouts = &dev->descriptorSetLayout };
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->descriptorSet));
+
+    _update_descriptor_sets (dev, ctx, dev->fontCache);
+}
 VkvgContext vkvg_create(VkvgSurface surf)
 {
     VkvgContext ctx = (vkvg_context*)calloc(1, sizeof(vkvg_context));
@@ -59,6 +61,11 @@ VkvgContext vkvg_create(VkvgSurface surf)
     ctx->lineWidth      = 1;
     ctx->pSurf          = surf;
     ctx->stencilRef     = 0;
+
+    ctx->pPrev          = surf->dev->lastCtx;
+    if (ctx->pPrev != NULL)
+        ctx->pPrev->pNext = ctx;
+    surf->dev->lastCtx = ctx;
 
     ctx->selectedFont.fontFile = (char*)calloc(FONT_FILE_NAME_MAX_SIZE,sizeof(char));
 
@@ -76,9 +83,6 @@ VkvgContext vkvg_create(VkvgSurface surf)
     return ctx;
 }
 void vkvg_flush (VkvgContext ctx){
-    if (ctx->indCount == 0)
-        return;
-
     _flush_cmd_buff(ctx);
     _init_cmd_buff(ctx);
 
@@ -123,6 +127,19 @@ void vkvg_destroy (VkvgContext ctx)
     free(ctx->selectedFont.fontFile);
     free(ctx->pathes);
     free(ctx->points);
+
+    if (ctx->pSurf->dev->lastCtx == ctx){
+        ctx->pSurf->dev->lastCtx = ctx->pPrev;
+        if (ctx->pPrev != NULL)
+            ctx->pPrev->pNext = NULL;
+    }else if (ctx->pPrev == NULL){
+        //first elmt, and it's not last one so pnext is not null
+        ctx->pNext->pPrev = NULL;
+    }else{
+        ctx->pPrev->pNext = ctx->pNext;
+        ctx->pNext->pPrev = ctx->pPrev;
+    }
+
     free(ctx);
 }
 

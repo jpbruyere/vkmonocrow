@@ -34,6 +34,9 @@ typedef struct _vkvg_device_t{
             vdpi;
 
     _font_cache_t*	fontCache;
-
+    VkvgContext     lastCtx;    //double linked list last elmt
 }vkvg_device;
+
+void _flush_all_contexes    (VkvgDevice dev);
+void _init_all_contexes     (VkvgDevice dev);
 #endif

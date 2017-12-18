@@ -9,8 +9,8 @@
 
 #include <fontconfig/fontconfig.h>
 
-#define FONT_PAGE_SIZE          4096
-#define FONT_CACHE_INIT_LAYERS  8
+#define FONT_PAGE_SIZE          2048
+#define FONT_CACHE_INIT_LAYERS  2
 #define FONT_FILE_NAME_MAX_SIZE 256
 
 #include "vkvg_internal.h"
