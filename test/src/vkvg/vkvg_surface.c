@@ -11,6 +11,31 @@ void _clear_depth_stencil(VkvgSurface surf, float depth, uint32_t stencil){
 
     vkh_cmd_submit_with_semaphores(surf->dev->queue,&surf->cmd,VK_NULL_HANDLE,surf->semaphore,VK_NULL_HANDLE);
 }
+void _clear_stencil (VkvgSurface surf)
+{
+    vkh_cmd_begin (surf->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    VkClearDepthStencilValue clr = {1.0f,0};
+    VkImageSubresourceRange range = {VK_IMAGE_ASPECT_STENCIL_BIT,0,1,0,1};
+
+    set_image_layout (surf->cmd, surf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    vkCmdClearDepthStencilImage (surf->cmd, surf->stencilMS->image,
+                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&clr,1,&range);
+
+    set_image_layout (surf->cmd, surf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    vkh_cmd_end (surf->cmd);
+
+    //vkh_cmd_submit_with_semaphores (surf->dev->queue,&surf->cmd,VK_NULL_HANDLE,surf->semaphore,VK_NULL_HANDLE);
+    VkFence fence = vkh_fence_create(surf->dev->vkDev);
+    vkh_cmd_submit (surf->dev->queue,&surf->cmd,fence);
+    vkWaitForFences(surf->dev->vkDev,1,&fence,VK_TRUE,UINT64_MAX);
+    vkDestroyFence(surf->dev->vkDev,fence,NULL);
+}
 
 VkvgSurface vkvg_surface_create(VkvgDevice dev, int32_t width, uint32_t height){
     VkvgSurface surf = (vkvg_surface*)calloc(1,sizeof(vkvg_surface));
@@ -53,6 +78,8 @@ VkvgSurface vkvg_surface_create(VkvgDevice dev, int32_t width, uint32_t height){
 
     surf->semaphore = vkh_semaphore_create(dev->vkDev);
     surf->cmd = vkh_cmd_buff_create(surf->dev->vkDev, surf->dev->cmdPool,VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    _clear_stencil(surf);
 
     return surf;
 }

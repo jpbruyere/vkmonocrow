@@ -87,8 +87,8 @@ void _setupRenderPass(VkvgDevice dev)
     VkAttachmentDescription attDS = {
                     .format = VK_FORMAT_S8_UINT,
                     .samples = VKVG_SAMPLES,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
@@ -187,7 +187,7 @@ void _setupPipelines(VkvgDevice dev)
                 .depthTestEnable = VK_FALSE,
                 .depthWriteEnable = VK_FALSE,
                 .depthCompareOp = VK_COMPARE_OP_ALWAYS,
-                .stencilTestEnable = VK_FALSE,
+                .stencilTestEnable = VK_TRUE,
                 .front = clipingOpState,
                 .back = clipingOpState };
 
@@ -197,7 +197,7 @@ void _setupPipelines(VkvgDevice dev)
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
     VkPipelineDynamicStateCreateInfo dynamicState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-                .dynamicStateCount = 2,
+                .dynamicStateCount = 3,
                 .pDynamicStates = dynamicStateEnables };
 
     VkPipelineViewportStateCreateInfo viewportState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,

@@ -17,4 +17,6 @@ typedef struct _vkvg_surface_t {
     VkSemaphore semaphore;
     VkCommandBuffer cmd;
 }vkvg_surface;
+
+void _clear_stencil (VkvgSurface surf);
 #endif

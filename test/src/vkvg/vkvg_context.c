@@ -1,4 +1,4 @@
-#include "vkvg_device_internal.h"
+﻿#include "vkvg_device_internal.h"
 #include "vkvg_context_internal.h"
 #include "vkvg_surface_internal.h"
 
@@ -60,7 +60,6 @@ VkvgContext vkvg_create(VkvgSurface surf)
     ctx->curPos.x       = ctx->curPos.y = 0;
     ctx->lineWidth      = 1;
     ctx->pSurf          = surf;
-    ctx->stencilRef     = 0;
 
     ctx->pPrev          = surf->dev->lastCtx;
     if (ctx->pPrev != NULL)
@@ -79,6 +78,7 @@ VkvgContext vkvg_create(VkvgSurface surf)
     _init_source            (ctx);
     _init_cmd_buff          (ctx);
     _clear_path             (ctx);
+    //vkvg_reset_clip         (ctx);//clear stencil buff
 
     return ctx;
 }
@@ -308,11 +308,18 @@ void vkvg_clip_preserve (VkvgContext ctx){
     vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
 }
 void vkvg_reset_clip (VkvgContext ctx){
-    VkClearAttachment clrAtt = {VK_IMAGE_ASPECT_STENCIL_BIT,2,0};
+    /*
+    VkClearValue  clearValue = {0};
+    VkClearAttachment clrAtt = {VK_IMAGE_ASPECT_STENCIL_BIT, 2 ,clearValue};
     VkClearRect clr = {{{0,0},{ctx->pSurf->width,ctx->pSurf->height}},0,1};
-    vkCmdClearAttachments (ctx->cmd ,1,&clrAtt,1,&clr);
     ctx->stencilRef=0;
     vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
+    vkCmdClearAttachments (ctx->cmd ,1,&clrAtt,1,&clr);
+    */
+    _flush_cmd_buff(ctx);
+    _clear_stencil(ctx->pSurf);
+    ctx->stencilRef=0;
+    _init_cmd_buff(ctx);
 }
 void vkvg_clip (VkvgContext ctx){
     vkvg_clip_preserve(ctx);

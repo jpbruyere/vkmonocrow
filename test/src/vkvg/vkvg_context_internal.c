@@ -100,19 +100,26 @@ void _flush_cmd_buff (VkvgContext ctx){
 }
 void _init_cmd_buff (VkvgContext ctx){
     ctx->vertCount = ctx->indCount = ctx->totalPoints = ctx->curIndStart = 0;
-
-    VkClearValue clearValues[1] = {{ { 0.0f, 1.0f, 0.0f, 1.0f } }};
+    //VkClearValue clearValues[2];
+    //clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+    //clearValues[1].depthStencil = { 1.0f, 0 };
+    VkClearValue clearValues[4] = {
+        { 0.0f, 0.0f, 0.0f, 1.0f },
+        { 0.0f, 0.0f, 0.0f, 1.0f },
+        { 1.0f, 0 },
+        { 1.0f, 0 }
+    };
     VkRenderPassBeginInfo renderPassBeginInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                                                   .renderPass = ctx->pSurf->dev->renderPass,
                                                   .framebuffer = ctx->pSurf->fb,
                                                   .renderArea.extent = {ctx->pSurf->width,ctx->pSurf->height},
-                                                  .clearValueCount = 1,
-                                                  .pClearValues = clearValues};
+                                                };
+                                                  //.clearValueCount = 4,
+                                                  //.pClearValues = clearValues};
     vkh_cmd_begin (ctx->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     vkCmdBeginRenderPass (ctx->cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     VkViewport viewport = {0,0,ctx->pSurf->width,ctx->pSurf->height,0,1};
     vkCmdSetViewport(ctx->cmd, 0, 1, &viewport);
-
     VkRect2D scissor = {{0,0},{ctx->pSurf->width,ctx->pSurf->height}};
     vkCmdSetScissor(ctx->cmd, 0, 1, &scissor);
 
@@ -127,14 +134,13 @@ void _init_cmd_buff (VkvgContext ctx){
     //vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
     //                   VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants),&pc);
 
-    vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
-
-    vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipeline);
     vkCmdBindDescriptorSets(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineLayout,
                             0, 1, &ctx->descriptorSet, 0, NULL);
     VkDeviceSize offsets[1] = { 0 };
     vkCmdBindVertexBuffers(ctx->cmd, 0, 1, &ctx->vertices.buffer, offsets);
     vkCmdBindIndexBuffer(ctx->cmd, ctx->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipeline);
+    vkCmdSetStencilReference(ctx->cmd,VK_STENCIL_FRONT_AND_BACK, ctx->stencilRef);
 }
 
 void _finish_path (VkvgContext ctx){
