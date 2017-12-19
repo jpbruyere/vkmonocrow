@@ -86,4 +86,8 @@ void vkvg_set_source_surface(VkvgContext ctx, VkvgSurface surf, float x, float y
 void vkvg_select_font_face	(VkvgContext ctx, const char* name);
 void vkvg_set_font_size		(VkvgContext ctx, uint32_t size);
 void vkvg_show_text			(VkvgContext ctx, const char* text);
+
+void vkvg_save              (VkvgContext ctx);
+void vkvg_restore           (VkvgContext ctx);
+
 #endif

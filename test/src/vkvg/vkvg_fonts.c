@@ -340,7 +340,7 @@ void _show_text (VkvgContext ctx, const char* text){
         string_width_in_pixels += glyph_pos[i].x_advance >> 6;
 
 
-    Vertex v = { .col = ctx->curRGBA };
+    Vertex v = { };
     vec2 pen = ctx->curPos;
 
     for (int i=0; i < glyph_count; ++i) {

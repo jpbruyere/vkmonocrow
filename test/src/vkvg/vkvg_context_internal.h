@@ -13,11 +13,41 @@
 #define VKVG_PATHES_SIZE			128
 #define VKVG_ARRAY_THRESHOLD		4
 
+#define ROUND_DOWN(v,p) (floorf(v * p) / p)
+
 typedef struct{
     vec2 pos;
     vec4 col;
     vec3 uv;
 }Vertex;
+
+typedef struct _ear_clip_point{
+    vec2 pos;
+    uint32_t idx;
+    struct _ear_clip_point* next;
+}ear_clip_point;
+
+typedef struct _vkvg_context_save_t{
+    struct _vkvg_context_save_t* pNext;
+
+    VkhImage        source;
+    VkhImage        stencilMS;
+    uint32_t        stencilRef;
+    vec2*		points;     //points array
+    size_t		sizePoints; //reserved size
+    uint32_t	pointCount; //effective points count
+
+    uint32_t	pathPtr;
+    uint32_t*	pathes;
+    size_t		sizePathes;
+
+    vec2		curPos;
+    float       lineWidth;
+
+    _vkvg_font_t  selectedFont;     //hold current face and size before cache addition
+    _vkvg_font_t* currentFont;      //font ready for lookup
+    VkvgDirection textDirection;
+}vkvg_context_save_t;
 
 typedef struct _vkvg_context_t {
     VkvgContext     pPrev;      //double linked list of contexts
@@ -42,25 +72,26 @@ typedef struct _vkvg_context_t {
     uint32_t	vertCount;
 
     //pathes, exists until stroke of fill
-    vec2*		points;
-    size_t		sizePoints;
-    uint32_t	pointCount;
-    uint32_t	totalPoints;
+    vec2*		points;     //points array
+    size_t		sizePoints; //reserved size
+    uint32_t	pointCount; //effective points count
 
     uint32_t	pathPtr;
     uint32_t*	pathes;
     size_t		sizePathes;
 
     vec2		curPos;
-    vec4		curRGBA;
     float		lineWidth;
 
     _vkvg_font_t  selectedFont;     //hold current face and size before cache addition
     _vkvg_font_t* currentFont;      //font ready for lookup
     VkvgDirection textDirection;
+
+    vkvg_context_save_t* pSavedCtxs;//last ctx saved ptr
 }vkvg_context;
 
 void _check_pathes_array	(VkvgContext ctx);
+float _normalizeAngle       (float a);
 
 void _add_point				(VkvgContext ctx, float x, float y);
 void _add_point_v2			(VkvgContext ctx, vec2 v);
@@ -77,12 +108,22 @@ void _create_cmd_buff		(VkvgContext ctx);
 void _init_cmd_buff			(VkvgContext ctx);
 void _flush_cmd_buff		(VkvgContext ctx);
 void _record_draw_cmd		(VkvgContext ctx);
-void _submit_wait_and_reset_cmd            (VkvgContext ctx);
+void _submit_wait_and_reset_cmd(VkvgContext ctx);
+void _submit_ctx_cmd        (VkvgContext ctx);
+void _wait_and_reset_ctx_cmd(VkvgContext ctx);
 
 void _finish_path			(VkvgContext ctx);
 void _clear_path			(VkvgContext ctx);
 bool _path_is_closed		(VkvgContext ctx, uint32_t ptrPath);
 uint32_t _get_last_point_of_closed_path (VkvgContext ctx, uint32_t ptrPath);
 
+void _init_source           (VkvgContext ctx);
 void _update_descriptor_sets(VkvgDevice dev, VkvgContext ctx, _font_cache_t* cache);
+
+static inline float vec2_zcross (vec2 v1, vec2 v2){
+    return v1.x*v2.y-v1.y*v2.x;
+}
+static inline float ecp_zcross (ear_clip_point* p0, ear_clip_point* p1, ear_clip_point* p2){
+    return vec2_zcross (vec2_sub (p1->pos, p0->pos), vec2_sub (p2->pos, p0->pos));
+}
 #endif

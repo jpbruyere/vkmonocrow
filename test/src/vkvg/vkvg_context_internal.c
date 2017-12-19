@@ -2,7 +2,6 @@
 #include "vkvg_context_internal.h"
 #include "vkvg_device_internal.h"
 
-
 void _check_pathes_array (VkvgContext ctx){
     if (ctx->sizePathes - ctx->pathPtr > VKVG_ARRAY_THRESHOLD)
         return;
@@ -24,7 +23,14 @@ void _add_curpos (VkvgContext ctx){
     ctx->points[ctx->pointCount] = ctx->curPos;
     ctx->pointCount++;
 }
-
+float _normalizeAngle(float a)
+{
+    float res = ROUND_DOWN(fmod(a,2.0f*M_PI),100);
+    if (res < 0.0f)
+        return res + 2.0f*M_PI;
+    else
+        return res;
+}
 void _create_vertices_buff (VkvgContext ctx){
     vkvg_buffer_create ((VkhDevice*)ctx->pSurf->dev,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -61,7 +67,6 @@ void _add_triangle_indices(VkvgContext ctx, uint32_t i0, uint32_t i1, uint32_t i
     inds[2] = i2;
     ctx->indCount+=3;
 }
-
 void _create_cmd_buff (VkvgContext ctx){
     ctx->cmd = vkh_cmd_buff_create(ctx->pSurf->dev->vkDev, ctx->pSurf->dev->cmdPool,VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 }
@@ -72,7 +77,7 @@ void _record_draw_cmd (VkvgContext ctx){
     ctx->curIndStart = ctx->indCount;
 }
 
-void _submit_wait_and_reset_cmd (VkvgContext ctx){
+void _submit_ctx_cmd (VkvgContext ctx){
     VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
     VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                                  .commandBufferCount = 1,
@@ -83,10 +88,18 @@ void _submit_wait_and_reset_cmd (VkvgContext ctx){
                                  .pWaitDstStageMask = &dstStageMask,
                                  .pCommandBuffers = &ctx->cmd};
     VK_CHECK_RESULT(vkQueueSubmit(ctx->pSurf->dev->queue, 1, &submit_info, ctx->flushFence));
+}
+void _wait_and_reset_ctx_cmd (VkvgContext ctx){
     vkWaitForFences(ctx->pSurf->dev->vkDev,1,&ctx->flushFence,VK_TRUE,UINT64_MAX);
     vkResetFences(ctx->pSurf->dev->vkDev,1,&ctx->flushFence);
     vkResetCommandBuffer(ctx->cmd,0);
 }
+
+void _submit_wait_and_reset_cmd (VkvgContext ctx){
+    _submit_ctx_cmd(ctx);
+    _wait_and_reset_ctx_cmd(ctx);
+}
+
 
 void _flush_cmd_buff (VkvgContext ctx){
     if (ctx->indCount == 0){
@@ -99,7 +112,7 @@ void _flush_cmd_buff (VkvgContext ctx){
     _submit_wait_and_reset_cmd(ctx);
 }
 void _init_cmd_buff (VkvgContext ctx){
-    ctx->vertCount = ctx->indCount = ctx->totalPoints = ctx->curIndStart = 0;
+    ctx->vertCount = ctx->indCount = ctx->curIndStart = 0;
     //VkClearValue clearValues[2];
     //clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
     //clearValues[1].depthStencil = { 1.0f, 0 };
@@ -153,7 +166,6 @@ void _finish_path (VkvgContext ctx){
 }
 void _clear_path (VkvgContext ctx){
     ctx->pathPtr = 0;
-    ctx->totalPoints += ctx->pointCount;
     ctx->pointCount = 0;
 }
 bool _path_is_closed (VkvgContext ctx, uint32_t ptrPath){
@@ -163,4 +175,102 @@ uint32_t _get_last_point_of_closed_path(VkvgContext ctx, uint32_t ptrPath){
     if (ptrPath+2 < ctx->pathPtr)			//this is not the last path
         return ctx->pathes[ptrPath+2]-1;    //last p is p prior to first idx of next path
     return ctx->pointCount-1;				//last point of path is last point of point array
+}
+void _update_descriptor_sets (VkvgDevice dev, VkvgContext ctx, _font_cache_t* cache){
+    VkDescriptorImageInfo descFontTex = { .imageView = cache->cacheTex->pDescriptor->imageView,
+                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                          .sampler = cache->cacheTex->pDescriptor->sampler };
+    VkDescriptorImageInfo descSrcTex = { .imageView = ctx->source->pDescriptor->imageView,
+                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                          .sampler = ctx->source->pDescriptor->sampler };
+
+    VkWriteDescriptorSet writeDescriptorSet[] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ctx->descriptorSet,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &descFontTex
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ctx->descriptorSet,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &descSrcTex
+        }};
+    vkUpdateDescriptorSets(dev->vkDev, 2, &writeDescriptorSet, 0, NULL);
+}
+void _init_source (VkvgContext ctx){
+    VkvgDevice dev = ctx->pSurf->dev;
+    ctx->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                     VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    vkh_image_create_descriptor(ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
+                                VK_SAMPLER_MIPMAP_MODE_NEAREST);
+
+    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                                                              .descriptorPool = dev->descriptorPool,
+                                                              .descriptorSetCount = 1,
+                                                              .pSetLayouts = &dev->descriptorSetLayout };
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->descriptorSet));
+
+    _update_descriptor_sets (dev, ctx, dev->fontCache);
+}
+void add_line(vkvg_context* ctx, vec2 p1, vec2 p2, vec4 col){
+    Vertex v = {{p1.x,p1.y},col,{0,0,-1}};
+    _add_vertex(ctx, v);
+    v.pos = p2;
+    _add_vertex(ctx, v);
+    uint32_t* inds = (uint32_t*)(ctx->indices.mapped + (ctx->indCount * sizeof(uint32_t)));
+    inds[0] = ctx->vertCount - 2;
+    inds[1] = ctx->vertCount - 1;
+    ctx->indCount+=2;
+}
+
+void _build_vb_step (vkvg_context* ctx, Vertex v, double hw, uint32_t iL, uint32_t i, uint32_t iR){
+    double alpha = 0;
+    vec2 v0n = vec2_line_norm(ctx->points[iL], ctx->points[i]);
+    vec2 v1n = vec2_line_norm(ctx->points[i], ctx->points[iR]);
+
+    vec2 bisec = vec2_add(v0n,v1n);
+    bisec = vec2_norm(bisec);
+    alpha = acos(v0n.x*v1n.x+v0n.y*v1n.y)/2.0;
+
+    float lh = (float)hw / cos(alpha);
+    bisec = vec2_perp(bisec);
+    bisec = vec2_mult(bisec,lh);
+
+#ifdef DEBUG
+
+    debugLinePoints[dlpCount] = ctx->points[i];
+    debugLinePoints[dlpCount+1] = _v2add(ctx->points[i], _vec2dToVec2(_v2Multd(v0n,10)));
+    dlpCount+=2;
+    debugLinePoints[dlpCount] = ctx->points[i];
+    debugLinePoints[dlpCount+1] = _v2add(ctx->points[i], _vec2dToVec2(_v2Multd(v1n,10)));
+    dlpCount+=2;
+    debugLinePoints[dlpCount] = ctx->points[i];
+    debugLinePoints[dlpCount+1] = ctx->points[iR];
+    dlpCount+=2;
+#endif
+    uint32_t firstIdx = ctx->vertCount;
+    v.pos = vec2_add(ctx->points[i], bisec);
+    _add_vertex(ctx, v);
+    v.pos = vec2_sub(ctx->points[i], bisec);
+    _add_vertex(ctx, v);
+    _add_tri_indices_for_rect(ctx, firstIdx);
+}
+
+bool ptInTriangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
+    float dX = p.x-p2.x;
+    float dY = p.y-p2.y;
+    float dX21 = p2.x-p1.x;
+    float dY12 = p1.y-p2.y;
+    float D = dY12*(p0.x-p2.x) + dX21*(p0.y-p2.y);
+    float s = dY12*dX + dX21*dY;
+    float t = (p2.y-p0.y)*dX + (p0.x-p2.x)*dY;
+    if (D<0)
+        return (s<=0) && (t<=0) && (s+t>=D);
+    return (s>=0) && (t>=0) && (s+t<=D);
 }

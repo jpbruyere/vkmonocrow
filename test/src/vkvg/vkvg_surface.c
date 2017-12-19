@@ -1,16 +1,6 @@
 #include "vkvg_surface_internal.h"
 #include "vkvg_device_internal.h"
 
-void _clear_depth_stencil(VkvgSurface surf, float depth, uint32_t stencil){
-
-    vkh_cmd_begin(surf->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    VkClearDepthStencilValue dsClear = {depth,stencil};
-    VkImageSubresourceRange imgSubresRange = {VK_IMAGE_ASPECT_STENCIL_BIT,0,1,0,1};
-    vkCmdClearDepthStencilImage(surf->cmd,surf->stencilMS->image,VK_IMAGE_LAYOUT_GENERAL,&dsClear,1, &imgSubresRange);
-    vkh_cmd_end(surf->cmd);
-
-    vkh_cmd_submit_with_semaphores(surf->dev->queue,&surf->cmd,VK_NULL_HANDLE,surf->semaphore,VK_NULL_HANDLE);
-}
 void _clear_stencil (VkvgSurface surf)
 {
     vkh_cmd_begin (surf->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);

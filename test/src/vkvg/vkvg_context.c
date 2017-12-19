@@ -7,48 +7,6 @@ static vec2 debugLinePoints[1000];
 static uint32_t dlpCount = 0;
 #endif
 
-void _update_descriptor_sets (VkvgDevice dev, VkvgContext ctx, _font_cache_t* cache){
-    VkDescriptorImageInfo descFontTex = { .imageView = cache->cacheTex->pDescriptor->imageView,
-                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                          .sampler = cache->cacheTex->pDescriptor->sampler };
-    VkDescriptorImageInfo descSrcTex = { .imageView = ctx->source->pDescriptor->imageView,
-                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                          .sampler = ctx->source->pDescriptor->sampler };
-
-    VkWriteDescriptorSet writeDescriptorSet[] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ctx->descriptorSet,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &descFontTex
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ctx->descriptorSet,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &descSrcTex
-        }};
-    vkUpdateDescriptorSets(dev->vkDev, 2, &writeDescriptorSet, 0, NULL);
-}
-void _init_source (VkvgContext ctx){
-    VkvgDevice dev = ctx->pSurf->dev;
-    ctx->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                     VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    vkh_image_create_descriptor(ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
-                                VK_SAMPLER_MIPMAP_MODE_NEAREST);
-
-    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                                                              .descriptorPool = dev->descriptorPool,
-                                                              .descriptorSetCount = 1,
-                                                              .pSetLayouts = &dev->descriptorSetLayout };
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->descriptorSet));
-
-    _update_descriptor_sets (dev, ctx, dev->fontCache);
-}
 VkvgContext vkvg_create(VkvgSurface surf)
 {
     VkvgContext ctx = (vkvg_context*)calloc(1, sizeof(vkvg_context));
@@ -78,7 +36,6 @@ VkvgContext vkvg_create(VkvgSurface surf)
     _init_source            (ctx);
     _init_cmd_buff          (ctx);
     _clear_path             (ctx);
-    //vkvg_reset_clip         (ctx);//clear stencil buff
 
     return ctx;
 }
@@ -109,6 +66,15 @@ void vkvg_flush (VkvgContext ctx){
 
 }
 
+void _free_ctx_save (vkvg_context_save_t* sav){
+    free(sav->pathes);
+    free(sav->points);
+    free(sav->selectedFont.fontFile);
+    vkh_image_destroy   (sav->source);
+    vkh_image_destroy   (sav->stencilMS);
+    free (sav);
+}
+
 void vkvg_destroy (VkvgContext ctx)
 {
     vkvg_flush(ctx);
@@ -127,6 +93,14 @@ void vkvg_destroy (VkvgContext ctx)
     free(ctx->selectedFont.fontFile);
     free(ctx->pathes);
     free(ctx->points);
+
+    //free saved context stack elmt
+    vkvg_context_save_t* next = ctx->pSavedCtxs;
+    while (next != NULL) {
+        vkvg_context_save_t* cur = next;
+        next = cur->pNext;
+        _free_ctx_save (cur);
+    }
 
     if (ctx->pSurf->dev->lastCtx == ctx){
         ctx->pSurf->dev->lastCtx = ctx->pPrev;
@@ -168,16 +142,7 @@ void vkvg_line_to (VkvgContext ctx, float x, float y)
     }
     _add_point(ctx, x, y);
 }
-#define ROUND_DOWN(v,p) (floorf(v * p) / p)
 
-float _normalizeAngle(float a)
-{
-    float res = ROUND_DOWN(fmod(a,2.0f*M_PI),100);
-    if (res < 0.0f)
-        return res + 2.0f*M_PI;
-    else
-        return res;
-}
 void vkvg_arc (VkvgContext ctx, float xc, float yc, float radius, float a1, float a2){
     float aDiff = a2 - a1;
     float aa1, aa2;
@@ -230,74 +195,6 @@ void vkvg_move_to (VkvgContext ctx, float x, float y)
     ctx->curPos.y = y;
 }
 
-void add_line(vkvg_context* ctx, vec2 p1, vec2 p2, vec4 col){
-    Vertex v = {{p1.x,p1.y},col,{0,0,-1}};
-    _add_vertex(ctx, v);
-    v.pos = p2;
-    _add_vertex(ctx, v);
-    uint32_t* inds = (uint32_t*)(ctx->indices.mapped + (ctx->indCount * sizeof(uint32_t)));
-    inds[0] = ctx->vertCount - 2;
-    inds[1] = ctx->vertCount - 1;
-    ctx->indCount+=2;
-}
-
-void _build_vb_step (vkvg_context* ctx, Vertex v, double hw, uint32_t iL, uint32_t i, uint32_t iR){
-    double alpha = 0;
-    vec2 v0n = vec2_line_norm(ctx->points[iL], ctx->points[i]);
-    vec2 v1n = vec2_line_norm(ctx->points[i], ctx->points[iR]);
-
-    vec2 bisec = vec2_add(v0n,v1n);
-    bisec = vec2_norm(bisec);
-    alpha = acos(v0n.x*v1n.x+v0n.y*v1n.y)/2.0;
-
-    float lh = (float)hw / cos(alpha);
-    bisec = vec2_perp(bisec);
-    bisec = vec2_mult(bisec,lh);
-
-#ifdef DEBUG
-
-    debugLinePoints[dlpCount] = ctx->points[i];
-    debugLinePoints[dlpCount+1] = _v2add(ctx->points[i], _vec2dToVec2(_v2Multd(v0n,10)));
-    dlpCount+=2;
-    debugLinePoints[dlpCount] = ctx->points[i];
-    debugLinePoints[dlpCount+1] = _v2add(ctx->points[i], _vec2dToVec2(_v2Multd(v1n,10)));
-    dlpCount+=2;
-    debugLinePoints[dlpCount] = ctx->points[i];
-    debugLinePoints[dlpCount+1] = ctx->points[iR];
-    dlpCount+=2;
-#endif
-    uint32_t firstIdx = ctx->vertCount;
-    v.pos = vec2_add(ctx->points[i], bisec);
-    _add_vertex(ctx, v);
-    v.pos = vec2_sub(ctx->points[i], bisec);
-    _add_vertex(ctx, v);
-    _add_tri_indices_for_rect(ctx, firstIdx);
-}
-typedef struct _ear_clip_point{
-    vec2 pos;
-    uint32_t idx;
-    struct _ear_clip_point* next;
-}ear_clip_point;
-
-bool ptInTriangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
-    float dX = p.x-p2.x;
-    float dY = p.y-p2.y;
-    float dX21 = p2.x-p1.x;
-    float dY12 = p1.y-p2.y;
-    float D = dY12*(p0.x-p2.x) + dX21*(p0.y-p2.y);
-    float s = dY12*dX + dX21*dY;
-    float t = (p2.y-p0.y)*dX + (p0.x-p2.x)*dY;
-    if (D<0)
-        return (s<=0) && (t<=0) && (s+t>=D);
-    return (s>=0) && (t>=0) && (s+t<=D);
-}
-
-static inline float vec2_zcross (vec2 v1, vec2 v2){
-    return v1.x*v2.y-v1.y*v2.x;
-}
-static inline float ecp_zcross (ear_clip_point* p0, ear_clip_point* p1, ear_clip_point* p2){
-    return vec2_zcross (vec2_sub (p1->pos, p0->pos), vec2_sub (p2->pos, p0->pos));
-}
 void vkvg_clip_preserve (VkvgContext ctx){
     vkCmdBindPipeline(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineClipping);
     vkvg_fill_preserve(ctx);
@@ -334,7 +231,7 @@ void vkvg_fill_preserve (VkvgContext ctx){
         vkvg_flush(ctx);
 
     uint32_t lastPathPointIdx, i = 0, ptrPath = 0;;
-    Vertex v = { .col = ctx->curRGBA };
+    Vertex v = {};
     v.uv.z = -1;
 
     while (ptrPath < ctx->pathPtr){
@@ -415,7 +312,7 @@ void vkvg_stroke_preserve (VkvgContext ctx)
     if (ctx->pointCount * 4 > ctx->sizeIndices - ctx->indCount)
         vkvg_flush(ctx);
 
-    Vertex v = { .col = ctx->curRGBA };
+    Vertex v = { };
     v.uv.z = -1;
 
     float hw = ctx->lineWidth / 2.0;
@@ -578,4 +475,170 @@ void vkvg_set_text_direction (vkvg_context* ctx, VkvgDirection direction){
 void vkvg_show_text (VkvgContext ctx, const char* text){
     _show_text(ctx,text);
     _record_draw_cmd(ctx);
+}
+
+void vkvg_save (VkvgContext ctx){
+    _flush_cmd_buff(ctx);
+
+    VkvgDevice dev = ctx->pSurf->dev;
+    vkvg_context_save_t* sav = (vkvg_context_save_t*)calloc(1,sizeof(vkvg_context_save_t));
+
+    sav->stencilMS = vkh_image_ms_create(dev,VK_FORMAT_S8_UINT,VKVG_SAMPLES,ctx->pSurf->width,ctx->pSurf->height,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    sav->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,
+                        VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    vkh_cmd_begin (ctx->cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    set_image_layout (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, sav->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, ctx->pSurf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, sav->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    VkImageSubresourceLayers sourceSubRes = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    VkImageSubresourceLayers stencilSubRes= {VK_IMAGE_ASPECT_STENCIL_BIT, 0, 0, 1};
+    VkImageCopy cregion = { .srcSubresource = sourceSubRes,
+                            .dstSubresource = sourceSubRes,
+                            .extent = {ctx->pSurf->width,ctx->pSurf->height,1}};
+    vkCmdCopyImage(ctx->cmd,
+                   ctx->source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   sav->source->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1, &cregion);
+
+    cregion.srcSubresource = cregion.dstSubresource = stencilSubRes;
+
+    vkCmdCopyImage(ctx->cmd,
+                   ctx->pSurf->stencilMS->image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   sav->stencilMS->image,       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1, &cregion);
+
+    set_image_layout (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, ctx->pSurf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
+          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    VK_CHECK_RESULT(vkEndCommandBuffer(ctx->cmd));
+    _submit_ctx_cmd(ctx);
+
+    sav->stencilRef = ctx->stencilRef;
+    sav->sizePoints = ctx->sizePoints;
+    sav->pointCount = ctx->pointCount;
+
+    sav->points = (vec2*)malloc (sav->pointCount * sizeof(vec2));
+    memcpy (sav->points, ctx->points, sav->pointCount * sizeof(vec2));
+
+    sav->pathPtr    = ctx->pathPtr;
+    sav->sizePathes = ctx->sizePathes;
+
+    sav->pathes = (uint32_t*)malloc (sav->pathPtr * sizeof(uint32_t));
+    memcpy (sav->pathes, ctx->pathes, sav->pathPtr * sizeof(uint32_t));
+
+    sav->curPos     = ctx->curPos;
+    sav->lineWidth  = ctx->lineWidth;
+
+    sav->selectedFont = ctx->selectedFont;
+    sav->selectedFont.fontFile = (char*)calloc(FONT_FILE_NAME_MAX_SIZE,sizeof(char));
+    strcpy (sav->selectedFont.fontFile, ctx->selectedFont.fontFile);
+
+    sav->currentFont  = ctx->currentFont;
+    sav->textDirection= ctx->textDirection;
+
+    sav->pNext      = ctx->pSavedCtxs;
+    ctx->pSavedCtxs = sav;
+
+    _wait_and_reset_ctx_cmd (ctx);
+    _init_cmd_buff          (ctx);
+}
+void vkvg_restore (VkvgContext ctx){
+    if (ctx->pSavedCtxs == NULL)
+        return;
+    _flush_cmd_buff(ctx);
+
+    vkvg_context_save_t* sav = ctx->pSavedCtxs;
+    ctx->pSavedCtxs = sav->pNext;
+
+    vkh_cmd_begin (ctx->cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    set_image_layout (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, sav->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, ctx->pSurf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, sav->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    VkImageSubresourceLayers sourceSubRes = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    VkImageSubresourceLayers stencilSubRes= {VK_IMAGE_ASPECT_STENCIL_BIT, 0, 0, 1};
+    VkImageCopy cregion = { .srcSubresource = sourceSubRes,
+                            .dstSubresource = sourceSubRes,
+                            .extent = {ctx->pSurf->width,ctx->pSurf->height,1}};
+    vkCmdCopyImage(ctx->cmd,
+                   sav->source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   ctx->source->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1, &cregion);
+
+    cregion.srcSubresource = cregion.dstSubresource = stencilSubRes;
+
+    vkCmdCopyImage(ctx->cmd,
+                   sav->stencilMS->image,       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   ctx->pSurf->stencilMS->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1, &cregion);
+
+    set_image_layout (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, ctx->pSurf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
+          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    VK_CHECK_RESULT(vkEndCommandBuffer(ctx->cmd));
+    _submit_ctx_cmd(ctx);
+
+    ctx->stencilRef = sav->stencilRef;
+    ctx->sizePoints = sav->sizePoints;
+    ctx->pointCount = sav->pointCount;
+
+    ctx->points = (vec2*)realloc ( ctx->points, ctx->sizePoints * sizeof(vec2));
+    memset (ctx->points, 0, ctx->sizePoints * sizeof(vec2));
+    memcpy (ctx->points, sav->points, ctx->pointCount * sizeof(vec2));
+
+    ctx->pathPtr    = sav->pathPtr;
+    ctx->sizePathes = sav->sizePathes;
+
+    ctx->pathes = (uint32_t*)realloc (ctx->pathes, ctx->sizePathes * sizeof(uint32_t));
+    memset (ctx->pathes, 0, ctx->sizePathes * sizeof(uint32_t));
+    memcpy (ctx->pathes, sav->pathes, ctx->pathPtr * sizeof(uint32_t));
+
+    ctx->curPos     = sav->curPos;
+    ctx->lineWidth  = sav->lineWidth;
+
+    ctx->selectedFont.charSize = sav->selectedFont.charSize;
+    strcpy (ctx->selectedFont.fontFile, sav->selectedFont.fontFile);
+
+    ctx->currentFont  = sav->currentFont;
+    ctx->textDirection= sav->textDirection;
+
+    _wait_and_reset_ctx_cmd (ctx);
+    _init_cmd_buff          (ctx);
+
+    _free_ctx_save(sav);
 }

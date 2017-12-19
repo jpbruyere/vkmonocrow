@@ -533,7 +533,7 @@ int main(int argc, char *argv[]) {
     int penY = 50;
     int penX = 10;
 
-    vkvg_rectangle(ctx,30,0,50,400);
+    vkvg_rectangle(ctx,30,0,100,400);
     vkvg_clip(ctx);
 
     vkvg_set_font_size(ctx,size-10);
@@ -543,21 +543,23 @@ int main(int argc, char *argv[]) {
     vkvg_show_text (ctx,"abcdefghijk");
     penY+=size;
 
-    vkvg_rectangle(ctx,50,0,150,800);
-    vkvg_clip(ctx);
+    vkvg_save(ctx);
+    vkvg_reset_clip(ctx);
 
     vkvg_select_font_face(ctx, "times");
+    vkvg_set_rgba(ctx,0.9,0.7,0.7,1);
     vkvg_move_to(ctx, penX,penY);
     vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
     penY+=size;
 
+    vkvg_restore(ctx);
+
     vkvg_select_font_face(ctx, "droid");
     vkvg_move_to(ctx, penX,penY);
-    vkvg_set_rgba(ctx,0.7,0.7,0.7,1);
     vkvg_show_text (ctx,"lmnopqrstuvwxyz123456789");
     penY+=size;
 
-    vkvg_reset_clip(ctx);
+
 
     vkvg_select_font_face(ctx, "times:bold");
     vkvg_move_to(ctx, penX,penY);
@@ -569,6 +571,8 @@ int main(int argc, char *argv[]) {
     vkvg_move_to(ctx, penX,penY);
     vkvg_show_text (ctx,"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
     penY+=size;
+
+
 
     vkvg_select_font_face(ctx, "arial:italic");
     vkvg_move_to(ctx, penX,penY);
@@ -585,6 +589,7 @@ int main(int argc, char *argv[]) {
     vkvg_move_to(ctx, penX,penY);
     vkvg_show_text (ctx,"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
     penY+=size;
+
 
     //vkvg_show_text (ctx,"ABCDABCD");
     //vkvg_show_text (ctx,"j");
@@ -615,11 +620,14 @@ int main(int argc, char *argv[]) {
 
     ctx = vkvg_create(surf);
 
+    vkvg_set_rgba(ctx,0.0,0.1,0.0,1);
+    vkvg_paint(ctx);
+
     vkvg_set_source_surface(ctx, surf2, 0, 0);
 
     //vkvg_set_rgba(ctx,0.0,1.0,1.0,1);
-    //vkvg_rectangle(ctx,300,300,400,400);
-    //vkvg_clip(ctx);
+    vkvg_rectangle(ctx,0,0,500,500);
+    vkvg_clip(ctx);
     /*vkvg_set_rgba(ctx,1.0,1.0,0,1);
     vkvg_rectangle(ctx,200,0,400,400);*/
 
