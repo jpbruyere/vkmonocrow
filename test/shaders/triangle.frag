@@ -20,6 +20,8 @@ layout(push_constant) uniform PushConsts {
 	vec2 srcOffset;
 } pushConsts;
 
+layout (constant_id = 0) const int NUM_SAMPLES = 8;
+
 void main()
 {
 	vec2 srcUV = (inSrcOffset+gl_FragCoord.xy)/inScreenSize;

@@ -12,7 +12,6 @@ typedef struct _vkvg_surface_t {
     VkFramebuffer fb;
     VkhImage	img;
     VkhImage	imgMS;
-    VkhImage	stencil;
     VkhImage	stencilMS;
     VkSemaphore semaphore;
     VkCommandBuffer cmd;

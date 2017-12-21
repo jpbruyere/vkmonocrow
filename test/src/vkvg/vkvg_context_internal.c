@@ -99,16 +99,39 @@ void _submit_wait_and_reset_cmd (VkvgContext ctx){
     _submit_ctx_cmd(ctx);
     _wait_and_reset_ctx_cmd(ctx);
 }
+void _explicit_ms_resolve (VkvgContext ctx){
+    set_image_layout (ctx->cmd, ctx->pSurf->imgMS->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    set_image_layout (ctx->cmd, ctx->pSurf->img->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
+    VkImageResolve re = {
+        .extent = {ctx->pSurf->width, ctx->pSurf->height,1},
+        .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
+        .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1}
+    };
+
+    vkCmdResolveImage(ctx->cmd,
+                      ctx->pSurf->imgMS->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      ctx->pSurf->img->image ,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      1,&re);
+    set_image_layout (ctx->cmd, ctx->pSurf->imgMS->image, VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL ,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+}
 
 void _flush_cmd_buff (VkvgContext ctx){
     if (ctx->indCount == 0){
         vkResetCommandBuffer(ctx->cmd,0);
         return;
     }
-    _record_draw_cmd(ctx);
-    vkCmdEndRenderPass (ctx->cmd);
-    vkh_cmd_end (ctx->cmd);
+    _record_draw_cmd        (ctx);
+    vkCmdEndRenderPass      (ctx->cmd);
+    _explicit_ms_resolve    (ctx);
+    vkh_cmd_end             (ctx->cmd);
+
     _submit_wait_and_reset_cmd(ctx);
 }
 void _init_cmd_buff (VkvgContext ctx){
@@ -205,7 +228,7 @@ void _update_descriptor_sets (VkvgDevice dev, VkvgContext ctx, _font_cache_t* ca
 void _init_source (VkvgContext ctx){
     VkvgDevice dev = ctx->pSurf->dev;
     ctx->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                     VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
+                                     VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkh_image_create_descriptor(ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
                                 VK_SAMPLER_MIPMAP_MODE_NEAREST);

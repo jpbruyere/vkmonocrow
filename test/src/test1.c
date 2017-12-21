@@ -450,13 +450,14 @@ void vkvg_rectangle(VkvgContext ctx, float x, float y, float width, float height
 }
 
 void vkvg_test_stroke(VkvgContext ctx){
-    vkvg_set_linewidth(ctx, 1);
+    vkvg_set_linewidth(ctx, 2);
     vkvg_set_rgba(ctx,1,0,0,1);
     vkvg_move_to(ctx,200.5,200.5);
     vkvg_line_to(ctx,400.5,200.5);
     vkvg_line_to(ctx,400.5,400.5);
     vkvg_line_to(ctx,200.5,400.5);
     vkvg_close_path(ctx);
+    vkvg_save (ctx);
     vkvg_stroke_preserve(ctx);
     vkvg_set_rgba(ctx,0,0.2,0.35,1);
     vkvg_fill(ctx);
@@ -468,6 +469,7 @@ void vkvg_test_stroke(VkvgContext ctx){
     vkvg_close_path(ctx);
     vkvg_stroke(ctx);
     vkvg_set_linewidth(ctx, 40);
+    vkvg_restore(ctx);
     vkvg_set_rgba(ctx,0.5,0.6,1,1.0);
     vkvg_move_to(ctx,700,475);
     vkvg_line_to(ctx,400,475);
@@ -533,8 +535,8 @@ int main(int argc, char *argv[]) {
     int penY = 50;
     int penX = 10;
 
-    vkvg_rectangle(ctx,30,0,100,400);
-    vkvg_clip(ctx);
+    /*vkvg_rectangle(ctx,30,0,100,400);
+    vkvg_clip(ctx);*/
 
     vkvg_set_font_size(ctx,size-10);
     vkvg_select_font_face(ctx, "droid");
@@ -543,8 +545,6 @@ int main(int argc, char *argv[]) {
     vkvg_show_text (ctx,"abcdefghijk");
     penY+=size;
 
-    vkvg_save(ctx);
-    vkvg_reset_clip(ctx);
 
     vkvg_select_font_face(ctx, "times");
     vkvg_set_rgba(ctx,0.9,0.7,0.7,1);
@@ -552,7 +552,7 @@ int main(int argc, char *argv[]) {
     vkvg_show_text (ctx,"abcdefghijklmnopqrstuvwxyz");
     penY+=size;
 
-    vkvg_restore(ctx);
+
 
     vkvg_select_font_face(ctx, "droid");
     vkvg_move_to(ctx, penX,penY);
@@ -596,6 +596,7 @@ int main(int argc, char *argv[]) {
 
     vkvg_test_fill(ctx);
 
+
     //vkvg_rectangle(ctx,300,300,400,400);
     //vkvg_clip(ctx);
 
@@ -626,8 +627,6 @@ int main(int argc, char *argv[]) {
     vkvg_set_source_surface(ctx, surf2, 0, 0);
 
     //vkvg_set_rgba(ctx,0.0,1.0,1.0,1);
-    vkvg_rectangle(ctx,0,0,500,500);
-    vkvg_clip(ctx);
     /*vkvg_set_rgba(ctx,1.0,1.0,0,1);
     vkvg_rectangle(ctx,200,0,400,400);*/
 
@@ -647,6 +646,8 @@ int main(int argc, char *argv[]) {
     vke_swapchain_destroy(&e.renderer);
 
     vkvg_surface_destroy(surf);
+    vkvg_surface_destroy(surf2);
+
     vkvg_device_destroy(device);
 
     EngineTerminate (&e);

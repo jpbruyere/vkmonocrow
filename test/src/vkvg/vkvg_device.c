@@ -37,8 +37,13 @@ void vkvg_device_destroy(VkvgDevice dev)
 {
     vkDestroyDescriptorSetLayout    (dev->vkDev, dev->descriptorSetLayout,NULL);
     vkDestroyDescriptorPool         (dev->vkDev, dev->descriptorPool,NULL);
+
     vkDestroyPipeline               (dev->vkDev, dev->pipeline, NULL);
     vkDestroyPipeline               (dev->vkDev, dev->pipelineClipping, NULL);
+    vkDestroyPipeline               (dev->vkDev, dev->pipeline_OP_SUB, NULL);
+    vkDestroyPipeline               (dev->vkDev, dev->pipelineWired, NULL);
+    vkDestroyPipeline               (dev->vkDev, dev->pipelineLineList, NULL);
+
     vkDestroyPipelineLayout         (dev->vkDev, dev->pipelineLayout, NULL);
     vkDestroyPipelineCache          (dev->vkDev, dev->pipelineCache, NULL);
     vkDestroyRenderPass             (dev->vkDev, dev->renderPass, NULL);
@@ -92,7 +97,7 @@ void _setupRenderPass(VkvgDevice dev)
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
-    VkAttachmentDescription attDSResolve = {
+/*    VkAttachmentDescription attDSResolve = {
                     .format = VK_FORMAT_S8_UINT,
                     .samples = VK_SAMPLE_COUNT_1_BIT,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -100,8 +105,8 @@ void _setupRenderPass(VkvgDevice dev)
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                    .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
-    VkAttachmentDescription attachments[] = {attColor,attColorResolve,attDS,attDSResolve};
+                    .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };*/
+    VkAttachmentDescription attachments[] = {attColor,attColorResolve,attDS};
     VkAttachmentReference colorRef = {
         .attachment = 0,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
@@ -138,7 +143,7 @@ void _setupRenderPass(VkvgDevice dev)
 
     VkSubpassDependency dependencies[] = {dep0,dep1};
     VkRenderPassCreateInfo renderPassInfo = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                .attachmentCount = 4,
+                .attachmentCount = 3,
                 .pAttachments = attachments,
                 .subpassCount = 1,
                 .pSubpasses = &subpassDescription,
@@ -237,6 +242,19 @@ void _setupPipelines(VkvgDevice dev)
         .module = vkh_load_module(dev->vkDev, "shaders/triangle.frag.spv"),
         .pName = "main",
     };
+
+    // Use specialization constants to pass number of samples to the shader (used for MSAA resolve)
+    VkSpecializationMapEntry specializationEntry = {
+        .constantID = 0,
+        .offset = 0,
+        .size = sizeof(uint32_t)};
+    uint32_t specializationData = VKVG_SAMPLES;
+    VkSpecializationInfo specializationInfo = {
+        .mapEntryCount = 1,
+        .pMapEntries = &specializationEntry,
+        .dataSize = sizeof(specializationData),
+        .pData = &specializationData};
+
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertStage,fragStage};
 
     pipelineCreateInfo.stageCount = 2;

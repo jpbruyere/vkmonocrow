@@ -5,7 +5,7 @@
 #include "vectors.h"
 #include "math.h"
 
-#define VKVG_SAMPLES VK_SAMPLE_COUNT_4_BIT
+#define VKVG_SAMPLES VK_SAMPLE_COUNT_8_BIT
 
 typedef enum VkvgDirection {
     VKVG_HORIZONTAL	= 0,
