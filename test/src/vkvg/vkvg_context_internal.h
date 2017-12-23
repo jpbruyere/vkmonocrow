@@ -27,12 +27,18 @@ typedef struct _ear_clip_point{
     struct _ear_clip_point* next;
 }ear_clip_point;
 
+typedef struct {
+    vec4    sourceRect;
+    vec2    scale;
+    vec2    translate;
+}push_constants;
+
 typedef struct _vkvg_context_save_t{
     struct _vkvg_context_save_t* pNext;
 
-    VkhImage        source;
-    VkhImage        stencilMS;
-    uint32_t        stencilRef;
+    VkhImage    source;
+    VkhImage    stencilMS;
+    uint32_t    stencilRef;
     vec2*		points;     //points array
     size_t		sizePoints; //reserved size
     uint32_t	pointCount; //effective points count
@@ -42,11 +48,14 @@ typedef struct _vkvg_context_save_t{
     size_t		sizePathes;
 
     vec2		curPos;
+    vec4		curRGBA;
     float       lineWidth;
 
-    _vkvg_font_t  selectedFont;     //hold current face and size before cache addition
-    _vkvg_font_t* currentFont;      //font ready for lookup
-    VkvgDirection textDirection;
+    _vkvg_font_t    selectedFont;     //hold current face and size before cache addition
+    _vkvg_font_t*   currentFont;      //font ready for lookup
+    VkvgDirection   textDirection;
+    push_constants  pushConsts;
+
 }vkvg_context_save_t;
 
 typedef struct _vkvg_context_t {
@@ -81,11 +90,14 @@ typedef struct _vkvg_context_t {
     size_t		sizePathes;
 
     vec2		curPos;
+    vec4		curRGBA;
     float		lineWidth;
 
     _vkvg_font_t  selectedFont;     //hold current face and size before cache addition
     _vkvg_font_t* currentFont;      //font ready for lookup
     VkvgDirection textDirection;
+
+    push_constants  pushConsts;
 
     vkvg_context_save_t* pSavedCtxs;//last ctx saved ptr
 }vkvg_context;

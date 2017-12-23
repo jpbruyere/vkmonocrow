@@ -21,10 +21,24 @@ typedef struct {
 }vec3;
 
 typedef struct {
-    float x;
-    float y;
-    float z;
-    float w;
+    union {
+        float x;
+        float r;
+    };
+    union {
+        float y;
+        float g;
+    };
+    union {
+        float z;
+        float width;
+        float b;
+    };
+    union {
+        float w;
+        float height;
+        float a;
+    };
 }vec4;
 
 typedef struct {

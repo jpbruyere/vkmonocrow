@@ -9,8 +9,7 @@ layout (location = 2) in vec3 inUV;
 
 layout (location = 0) out vec4 outColor;
 layout (location = 1) out vec3 outUV;
-layout (location = 2) out vec2 outScreenSize;
-layout (location = 3) out vec2 outSrcOffset;	//source offset (set_source x,y)
+layout (location = 2) out vec4 outSrcRect;
 
 out gl_PerVertex
 {
@@ -18,17 +17,16 @@ out gl_PerVertex
 };
 
 layout(push_constant) uniform PushConsts {
-	vec2 screenSize;
+	vec4 sourceRect;
 	vec2 scale;
 	vec2 translate;
-	vec2 srcOffset;
 } pushConsts;
 
 void main()
 {
 	outColor = inColor;
 	outUV = inUV;
-	outScreenSize = pushConsts.screenSize;
-	outSrcOffset = pushConsts.srcOffset;
+	outSrcRect = pushConsts.sourceRect;
+
 	gl_Position = vec4(inPos.xy*pushConsts.scale+pushConsts.translate,0.0, 1.0);
 }

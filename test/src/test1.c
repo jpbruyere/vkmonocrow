@@ -512,9 +512,10 @@ int main(int argc, char *argv[]) {
 
 
     ctx = vkvg_create(surf);*/
-    vkvg_set_rgba(ctx,0.01,0,0,1);
+    vkvg_set_rgba(ctx,0.5,0,0,1);
     vkvg_rectangle(ctx,0,0,1024,800);
     vkvg_fill (ctx);
+
     vkvg_set_rgba(ctx,1,1,0,1);
     vkvg_rectangle(ctx,200,200,400,400);
     vkvg_fill (ctx);
@@ -621,14 +622,14 @@ int main(int argc, char *argv[]) {
 
     ctx = vkvg_create(surf);
 
-    vkvg_set_rgba(ctx,0.0,0.1,0.0,1);
+    vkvg_set_rgba(ctx,0.0,0.0,0.1,1);
     vkvg_paint(ctx);
 
-    vkvg_set_source_surface(ctx, surf2, 0, 0);
+    vkvg_set_source_surface(ctx, surf2, 100, 100);
 
     //vkvg_set_rgba(ctx,0.0,1.0,1.0,1);
-    /*vkvg_set_rgba(ctx,1.0,1.0,0,1);
-    vkvg_rectangle(ctx,200,0,400,400);*/
+    //vkvg_set_rgba(ctx,1.0,1.0,0,1);
+    //vkvg_rectangle(ctx,0,0,400,400);
 
     //vkvg_fill (ctx);
     vkvg_paint(ctx);

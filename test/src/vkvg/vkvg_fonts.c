@@ -21,7 +21,7 @@ void _init_fonts_cache (VkvgDevice dev){
                             VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkh_image_create_descriptor (cache->cacheTex, VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT,
-                                 VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
+                                 VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
 
     cache->uploadFence = vkh_fence_create_signaled(dev->vkDev);
 
@@ -51,7 +51,7 @@ void _increase_font_tex_array (VkvgDevice dev){
                                               VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkh_image_create_descriptor (newImg, VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT,
-                               VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
+                               VK_FILTER_NEAREST, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST,VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
 
     VkImageSubresourceRange subresNew   = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,newSize};
     VkImageSubresourceRange subres      = {VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,cache->cacheTexLength};
@@ -340,7 +340,7 @@ void _show_text (VkvgContext ctx, const char* text){
         string_width_in_pixels += glyph_pos[i].x_advance >> 6;
 
 
-    Vertex v = { };
+    Vertex v = {.col = ctx->curRGBA};
     vec2 pen = ctx->curPos;
 
     for (int i=0; i < glyph_count; ++i) {
@@ -351,8 +351,8 @@ void _show_text (VkvgContext ctx, const char* text){
 
         //continue;
         if (cr!=NULL){
-            float uvWidth = cr->bounds.z / (float)FONT_PAGE_SIZE;
-            float uvHeight = cr->bounds.w / (float)FONT_PAGE_SIZE;
+            float uvWidth = cr->bounds.width / (float)FONT_PAGE_SIZE;
+            float uvHeight = cr->bounds.height / (float)FONT_PAGE_SIZE;
             vec2 p0 = {pen.x + cr->bmpDiff.x + (glyph_pos[i].x_offset >> 6),
                        pen.y - cr->bmpDiff.y + (glyph_pos[i].y_offset >> 6)};
             v.pos = p0;
@@ -364,17 +364,17 @@ void _show_text (VkvgContext ctx, const char* text){
             v.uv.z = cr->pageIdx;
             _add_vertex(ctx,v);
 
-            v.pos.y += cr->bounds.w;
+            v.pos.y += cr->bounds.height;
             v.uv.y += uvHeight;
             _add_vertex(ctx,v);
 
-            v.pos.x += cr->bounds.z;
+            v.pos.x += cr->bounds.width;
             v.pos.y = p0.y;
             v.uv.x += uvWidth;
             v.uv.y = cr->bounds.y;
             _add_vertex(ctx,v);
 
-            v.pos.y += cr->bounds.w;
+            v.pos.y += cr->bounds.height;
             v.uv.y += uvHeight;
             _add_vertex(ctx,v);
 

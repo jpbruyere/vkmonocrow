@@ -129,7 +129,7 @@ void _flush_cmd_buff (VkvgContext ctx){
     }
     _record_draw_cmd        (ctx);
     vkCmdEndRenderPass      (ctx->cmd);
-    _explicit_ms_resolve    (ctx);
+    //_explicit_ms_resolve    (ctx);
     vkh_cmd_end             (ctx->cmd);
 
     _submit_wait_and_reset_cmd(ctx);
@@ -159,14 +159,14 @@ void _init_cmd_buff (VkvgContext ctx){
     VkRect2D scissor = {{0,0},{ctx->pSurf->width,ctx->pSurf->height}};
     vkCmdSetScissor(ctx->cmd, 0, 1, &scissor);
 
-    push_constants pc = {
+    /*push_constants pc = {
         {(float)ctx->pSurf->width,(float)ctx->pSurf->height},
         {2.0f/(float)ctx->pSurf->width,2.0f/(float)ctx->pSurf->height},
         {-1.f,-1.f},
-        {0,0}
-    };
+    };*/
+
     vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
-                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants),&pc);
+                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants),&ctx->pushConsts);
     //vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
     //                   VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants),&pc);
 
@@ -231,7 +231,7 @@ void _init_source (VkvgContext ctx){
                                      VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkh_image_create_descriptor(ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
-                                VK_SAMPLER_MIPMAP_MODE_NEAREST);
+                                VK_SAMPLER_MIPMAP_MODE_NEAREST,VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
 
     VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                                                               .descriptorPool = dev->descriptorPool,

@@ -19,6 +19,13 @@ VkvgContext vkvg_create(VkvgSurface surf)
     ctx->lineWidth      = 1;
     ctx->pSurf          = surf;
 
+    push_constants pc = {
+            {},
+            {2.0f/(float)ctx->pSurf->width,2.0f/(float)ctx->pSurf->height},
+            {-1.f,-1.f}
+    };
+    ctx->pushConsts = pc;
+
     ctx->pPrev          = surf->dev->lastCtx;
     if (ctx->pPrev != NULL)
         ctx->pPrev->pNext = ctx;
@@ -231,7 +238,7 @@ void vkvg_fill_preserve (VkvgContext ctx){
         vkvg_flush(ctx);
 
     uint32_t lastPathPointIdx, i = 0, ptrPath = 0;;
-    Vertex v = {};
+    Vertex v = {.col = ctx->curRGBA};
     v.uv.z = -1;
 
     while (ptrPath < ctx->pathPtr){
@@ -312,7 +319,7 @@ void vkvg_stroke_preserve (VkvgContext ctx)
     if (ctx->pointCount * 4 > ctx->sizeIndices - ctx->indCount)
         vkvg_flush(ctx);
 
-    Vertex v = { };
+    Vertex v = {.col = ctx->curRGBA};
     v.uv.z = -1;
 
     float hw = ctx->lineWidth / 2.0;
@@ -384,10 +391,10 @@ void vkvg_stroke (VkvgContext ctx)
 void _vkvg_fill_rectangle (VkvgContext ctx, float x, float y, float width, float height){
     Vertex v[4] =
     {
-        {{x,y},             {},{0,0,-1}},
-        {{x,y+height},      {},{0,0,-1}},
-        {{x+width,y},       {},{0,0,-1}},
-        {{x+width,y+height},{},{0,0,-1}}
+        {{x,y},             ctx->curRGBA,{0,0,-1}},
+        {{x,y+height},      ctx->curRGBA,{0,0,-1}},
+        {{x+width,y},       ctx->curRGBA,{0,0,-1}},
+        {{x+width,y+height},ctx->curRGBA,{0,0,-1}}
     };
     uint32_t firstIdx = ctx->vertCount;
     Vertex* pVert = (Vertex*)(ctx->vertices.mapped + ctx->vertCount * sizeof(Vertex));
@@ -401,6 +408,11 @@ void vkvg_paint (VkvgContext ctx){
 
 void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
 {
+    ctx->curRGBA.x = r;
+    ctx->curRGBA.y = g;
+    ctx->curRGBA.z = b;
+    ctx->curRGBA.w = a;
+    /*
     _flush_cmd_buff(ctx);
 
     vkh_cmd_begin (ctx->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -419,6 +431,7 @@ void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
 
     _submit_wait_and_reset_cmd  (ctx);
     _init_cmd_buff              (ctx);
+    */
 }
 void vkvg_set_source_surface(VkvgContext ctx, VkvgSurface surf, float x, float y){
     _flush_cmd_buff(ctx);
@@ -436,7 +449,7 @@ void vkvg_set_source_surface(VkvgContext ctx, VkvgSurface surf, float x, float y
         .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
         .srcOffsets = {{0,0,0},{surf->width,surf->height,1}},
         .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-        .dstOffsets = {{x,y,0},{surf->width+x,surf->height+y,1}}
+        .dstOffsets = {{0,0,0},{surf->width,surf->height,1}}
     };
 
     vkCmdBlitImage(ctx->cmd,surf->img->image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -453,6 +466,11 @@ void vkvg_set_source_surface(VkvgContext ctx, VkvgSurface surf, float x, float y
 
     _submit_wait_and_reset_cmd  (ctx);
     _init_cmd_buff              (ctx);
+
+    vec4 srcRect = {x,y,surf->width,surf->height};
+    ctx->pushConsts.sourceRect = srcRect;
+    vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
+                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants),&ctx->pushConsts);
 }
 
 void vkvg_set_linewidth (VkvgContext ctx, float width){
@@ -548,6 +566,7 @@ void vkvg_save (VkvgContext ctx){
     memcpy (sav->pathes, ctx->pathes, sav->pathPtr * sizeof(uint32_t));
 
     sav->curPos     = ctx->curPos;
+    sav->curRGBA    = ctx->curRGBA;
     sav->lineWidth  = ctx->lineWidth;
 
     sav->selectedFont = ctx->selectedFont;
@@ -556,6 +575,7 @@ void vkvg_save (VkvgContext ctx){
 
     sav->currentFont  = ctx->currentFont;
     sav->textDirection= ctx->textDirection;
+    sav->pushConsts   = ctx->pushConsts;
 
     sav->pNext      = ctx->pSavedCtxs;
     ctx->pSavedCtxs = sav;
@@ -629,6 +649,7 @@ void vkvg_restore (VkvgContext ctx){
     memcpy (ctx->pathes, sav->pathes, ctx->pathPtr * sizeof(uint32_t));
 
     ctx->curPos     = sav->curPos;
+    ctx->curRGBA    = sav->curRGBA;
     ctx->lineWidth  = sav->lineWidth;
 
     ctx->selectedFont.charSize = sav->selectedFont.charSize;
@@ -636,6 +657,7 @@ void vkvg_restore (VkvgContext ctx){
 
     ctx->currentFont  = sav->currentFont;
     ctx->textDirection= sav->textDirection;
+    ctx->pushConsts   = sav->pushConsts;
 
     _wait_and_reset_ctx_cmd (ctx);
     _init_cmd_buff          (ctx);

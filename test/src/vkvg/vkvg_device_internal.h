@@ -5,13 +5,6 @@
 #include "vkvg.h"
 #include "vkvg_fonts.h"
 
-typedef struct {
-    vec2    screenSize;
-    vec2    scale;
-    vec2    translate;
-    vec2    scrOffset;
-}push_constants;
-
 typedef struct _vkvg_device_t{
     VkDevice				vkDev;
     VkPhysicalDeviceMemoryProperties phyMemProps;
