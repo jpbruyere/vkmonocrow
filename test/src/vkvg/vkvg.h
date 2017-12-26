@@ -23,6 +23,7 @@ void		vkvg_device_destroy			(VkvgDevice dev);
 VkvgSurface vkvg_surface_create			(VkvgDevice dev, int32_t width, uint32_t height);
 void		vkvg_surface_destroy		(VkvgSurface surf);
 VkImage		vkvg_surface_get_vk_image	(VkvgSurface surf);
+VkImage		vkvg_surface_get_vkh_image	(VkvgSurface surf);
 
 //mimic from cairo, to facilitate usage of vkvg as cairo vulkan backend
 typedef enum _vkvg_operator {

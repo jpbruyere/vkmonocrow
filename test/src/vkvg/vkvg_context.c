@@ -40,7 +40,8 @@ VkvgContext vkvg_create(VkvgSurface surf)
 
     _create_vertices_buff   (ctx);
     _create_cmd_buff        (ctx);
-    _init_source            (ctx);
+    _init_descriptor_sets   (ctx);
+    _update_font_descriptor_set (ctx);
     _init_cmd_buff          (ctx);
     _clear_path             (ctx);
 
@@ -77,14 +78,13 @@ void _free_ctx_save (vkvg_context_save_t* sav){
     free(sav->pathes);
     free(sav->points);
     free(sav->selectedFont.fontFile);
-    vkh_image_destroy   (sav->source);
     vkh_image_destroy   (sav->stencilMS);
     free (sav);
 }
 
 void vkvg_destroy (VkvgContext ctx)
 {
-    vkvg_flush(ctx);
+    _flush_cmd_buff(ctx);
 
     VkDevice dev = ctx->pSurf->dev->vkDev;
     vkDestroyFence      (dev, ctx->flushFence,NULL);
@@ -95,7 +95,7 @@ void vkvg_destroy (VkvgContext ctx)
     vkvg_buffer_destroy (&ctx->indices);
     vkvg_buffer_destroy (&ctx->vertices);
 
-    vkh_image_destroy   (ctx->source);
+    //vkh_image_destroy   (ctx->source);
 
     free(ctx->selectedFont.fontFile);
     free(ctx->pathes);
@@ -436,36 +436,23 @@ void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
 void vkvg_set_source_surface(VkvgContext ctx, VkvgSurface surf, float x, float y){
     _flush_cmd_buff(ctx);
 
-    vkh_cmd_begin (ctx->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    ctx->source = surf->img;
 
-    set_image_layout        (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout        (ctx->cmd, surf->img->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    vkh_image_create_sampler(ctx->source,VK_FILTER_NEAREST, VK_FILTER_NEAREST,
+                             VK_SAMPLER_MIPMAP_MODE_NEAREST,VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
 
-    VkImageBlit firstMipBlit = {
-        .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-        .srcOffsets = {{0,0,0},{surf->width,surf->height,1}},
-        .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},
-        .dstOffsets = {{0,0,0},{surf->width,surf->height,1}}
-    };
+    if (ctx->source->layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
+        vkh_cmd_begin (ctx->cmd,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    vkCmdBlitImage(ctx->cmd,surf->img->image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   ctx->source->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1,&firstMipBlit,VK_SAMPLER_MIPMAP_MODE_NEAREST);
+        vkh_image_set_layout        (ctx->cmd, ctx->source, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+        vkh_cmd_end                 (ctx->cmd);
 
-    set_image_layout        (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout        (ctx->cmd, surf->img->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    vkh_cmd_end                 (ctx->cmd);
+        _submit_wait_and_reset_cmd  (ctx);
+    }
 
-    _submit_wait_and_reset_cmd  (ctx);
-    _init_cmd_buff              (ctx);
+    _update_source_descriptor_set   (ctx);
+    _init_cmd_buff                  (ctx);
 
     vec4 srcRect = {x,y,surf->width,surf->height};
     ctx->pushConsts.sourceRect = srcRect;
@@ -503,50 +490,24 @@ void vkvg_save (VkvgContext ctx){
 
     sav->stencilMS = vkh_image_ms_create(dev,VK_FORMAT_S8_UINT,VKVG_SAMPLES,ctx->pSurf->width,ctx->pSurf->height,
                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    sav->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,
-                        VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT ,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
     vkh_cmd_begin (ctx->cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    set_image_layout (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    vkh_image_set_layout (ctx->cmd, ctx->pSurf->stencilMS, VK_IMAGE_ASPECT_STENCIL_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, sav->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, ctx->pSurf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, sav->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    vkh_image_set_layout (ctx->cmd, sav->stencilMS, VK_IMAGE_ASPECT_STENCIL_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    VkImageSubresourceLayers sourceSubRes = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    VkImageSubresourceLayers stencilSubRes= {VK_IMAGE_ASPECT_STENCIL_BIT, 0, 0, 1};
-    VkImageCopy cregion = { .srcSubresource = sourceSubRes,
-                            .dstSubresource = sourceSubRes,
+    VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_STENCIL_BIT, 0, 0, 1},
+                            .dstSubresource = {VK_IMAGE_ASPECT_STENCIL_BIT, 0, 0, 1},
                             .extent = {ctx->pSurf->width,ctx->pSurf->height,1}};
-    vkCmdCopyImage(ctx->cmd,
-                   ctx->source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   sav->source->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1, &cregion);
-
-    cregion.srcSubresource = cregion.dstSubresource = stencilSubRes;
-
     vkCmdCopyImage(ctx->cmd,
                    ctx->pSurf->stencilMS->image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    sav->stencilMS->image,       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                    1, &cregion);
 
-    set_image_layout (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, ctx->pSurf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
-          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    vkh_image_set_layout (ctx->cmd, ctx->pSurf->stencilMS, VK_IMAGE_ASPECT_STENCIL_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     VK_CHECK_RESULT(vkEndCommandBuffer(ctx->cmd));
@@ -576,6 +537,7 @@ void vkvg_save (VkvgContext ctx){
     sav->currentFont  = ctx->currentFont;
     sav->textDirection= ctx->textDirection;
     sav->pushConsts   = ctx->pushConsts;
+    sav->source       = ctx->source;
 
     sav->pNext      = ctx->pSavedCtxs;
     ctx->pSavedCtxs = sav;
@@ -593,41 +555,19 @@ void vkvg_restore (VkvgContext ctx){
 
     vkh_cmd_begin (ctx->cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    set_image_layout (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    vkh_image_set_layout (ctx->cmd, ctx->pSurf->stencilMS, VK_IMAGE_ASPECT_STENCIL_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, sav->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, ctx->pSurf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, sav->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    vkh_image_set_layout (ctx->cmd, sav->stencilMS, VK_IMAGE_ASPECT_STENCIL_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    VkImageSubresourceLayers sourceSubRes = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    VkImageSubresourceLayers stencilSubRes= {VK_IMAGE_ASPECT_STENCIL_BIT, 0, 0, 1};
-    VkImageCopy cregion = { .srcSubresource = sourceSubRes,
-                            .dstSubresource = sourceSubRes,
+    VkImageCopy cregion = { .srcSubresource = {VK_IMAGE_ASPECT_STENCIL_BIT, 0, 0, 1},
+                            .dstSubresource = {VK_IMAGE_ASPECT_STENCIL_BIT, 0, 0, 1},
                             .extent = {ctx->pSurf->width,ctx->pSurf->height,1}};
-    vkCmdCopyImage(ctx->cmd,
-                   sav->source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   ctx->source->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1, &cregion);
-
-    cregion.srcSubresource = cregion.dstSubresource = stencilSubRes;
-
     vkCmdCopyImage(ctx->cmd,
                    sav->stencilMS->image,       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    ctx->pSurf->stencilMS->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                    1, &cregion);
-
-    set_image_layout (ctx->cmd, ctx->source->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, ctx->pSurf->stencilMS->image, VK_IMAGE_ASPECT_STENCIL_BIT,
-          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    vkh_image_set_layout (ctx->cmd, ctx->pSurf->stencilMS, VK_IMAGE_ASPECT_STENCIL_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     VK_CHECK_RESULT(vkEndCommandBuffer(ctx->cmd));
@@ -658,6 +598,7 @@ void vkvg_restore (VkvgContext ctx){
     ctx->currentFont  = sav->currentFont;
     ctx->textDirection= sav->textDirection;
     ctx->pushConsts   = sav->pushConsts;
+    ctx->source       = sav->source;
 
     _wait_and_reset_ctx_cmd (ctx);
     _init_cmd_buff          (ctx);

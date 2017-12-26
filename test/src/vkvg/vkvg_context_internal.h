@@ -129,8 +129,9 @@ void _clear_path			(VkvgContext ctx);
 bool _path_is_closed		(VkvgContext ctx, uint32_t ptrPath);
 uint32_t _get_last_point_of_closed_path (VkvgContext ctx, uint32_t ptrPath);
 
-void _init_source           (VkvgContext ctx);
-void _update_descriptor_sets(VkvgDevice dev, VkvgContext ctx, _font_cache_t* cache);
+void _init_descriptor_sets          (VkvgContext ctx);
+void _update_source_descriptor_set  (VkvgContext ctx);
+void _update_font_descriptor_set   (VkvgContext ctx);
 
 static inline float vec2_zcross (vec2 v1, vec2 v2){
     return v1.x*v2.y-v1.y*v2.x;

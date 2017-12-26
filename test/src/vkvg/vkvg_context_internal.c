@@ -100,11 +100,9 @@ void _submit_wait_and_reset_cmd (VkvgContext ctx){
     _wait_and_reset_ctx_cmd(ctx);
 }
 void _explicit_ms_resolve (VkvgContext ctx){
-    set_image_layout (ctx->cmd, ctx->pSurf->imgMS->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    vkh_image_set_layout (ctx->cmd, ctx->pSurf->imgMS, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    set_image_layout (ctx->cmd, ctx->pSurf->img->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    vkh_image_set_layout (ctx->cmd, ctx->pSurf->img, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     VkImageResolve re = {
@@ -117,8 +115,7 @@ void _explicit_ms_resolve (VkvgContext ctx){
                       ctx->pSurf->imgMS->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                       ctx->pSurf->img->image ,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                       1,&re);
-    set_image_layout (ctx->cmd, ctx->pSurf->imgMS->image, VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL ,
+    vkh_image_set_layout (ctx->cmd, ctx->pSurf->imgMS, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL ,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 }
 
@@ -199,47 +196,47 @@ uint32_t _get_last_point_of_closed_path(VkvgContext ctx, uint32_t ptrPath){
         return ctx->pathes[ptrPath+2]-1;    //last p is p prior to first idx of next path
     return ctx->pointCount-1;				//last point of path is last point of point array
 }
-void _update_descriptor_sets (VkvgDevice dev, VkvgContext ctx, _font_cache_t* cache){
-    VkDescriptorImageInfo descFontTex = { .imageView = cache->cacheTex->pDescriptor->imageView,
-                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                          .sampler = cache->cacheTex->pDescriptor->sampler };
-    VkDescriptorImageInfo descSrcTex = { .imageView = ctx->source->pDescriptor->imageView,
-                                          .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                          .sampler = ctx->source->pDescriptor->sampler };
+void _update_source_descriptor_set (VkvgContext ctx){
+    VkvgDevice dev = ctx->pSurf->dev;
+    VkDescriptorImageInfo descSrcTex = { .imageView = ctx->source->view,
+                                          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                          .sampler = ctx->source->sampler };
 
-    VkWriteDescriptorSet writeDescriptorSet[] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ctx->descriptorSet,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &descFontTex
-        },{
+    VkWriteDescriptorSet writeDescriptorSet = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = ctx->descriptorSet,
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &descSrcTex
-        }};
-    vkUpdateDescriptorSets(dev->vkDev, 2, &writeDescriptorSet, 0, NULL);
+    };
+    vkUpdateDescriptorSets(dev->vkDev, 1, &writeDescriptorSet, 0, NULL);
 }
-void _init_source (VkvgContext ctx){
+void _update_font_descriptor_set (VkvgContext ctx){
     VkvgDevice dev = ctx->pSurf->dev;
-    ctx->source = vkh_image_create(dev,FB_COLOR_FORMAT,ctx->pSurf->width,ctx->pSurf->height,VK_IMAGE_TILING_OPTIMAL,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                     VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    vkh_image_create_descriptor(ctx->source, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, VK_FILTER_NEAREST, VK_FILTER_NEAREST,
-                                VK_SAMPLER_MIPMAP_MODE_NEAREST,VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
+    _font_cache_t* cache = dev->fontCache;
+    VkDescriptorImageInfo descFontTex = { .imageView = cache->cacheTex->view,
+                                          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                          .sampler = cache->cacheTex->sampler };
 
+    VkWriteDescriptorSet writeDescriptorSet = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ctx->descriptorSet,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &descFontTex
+    };
+    vkUpdateDescriptorSets(dev->vkDev, 1, &writeDescriptorSet, 0, NULL);
+}
+
+void _init_descriptor_sets (VkvgContext ctx){
+    VkvgDevice dev = ctx->pSurf->dev;
     VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                                                               .descriptorPool = dev->descriptorPool,
                                                               .descriptorSetCount = 1,
                                                               .pSetLayouts = &dev->descriptorSetLayout };
     VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->descriptorSet));
-
-    _update_descriptor_sets (dev, ctx, dev->fontCache);
 }
 void add_line(vkvg_context* ctx, vec2 p1, vec2 p2, vec4 col){
     Vertex v = {{p1.x,p1.y},col,{0,0,-1}};
