@@ -167,8 +167,9 @@ void _init_cmd_buff (VkvgContext ctx){
     //vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
     //                   VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants),&pc);
 
+    VkDescriptorSet dss[] = {ctx->dsFont,ctx->dsSrc};
     vkCmdBindDescriptorSets(ctx->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pSurf->dev->pipelineLayout,
-                            0, 1, &ctx->descriptorSet, 0, NULL);
+                            0, 2, dss, 0, NULL);
     VkDeviceSize offsets[1] = { 0 };
     vkCmdBindVertexBuffers(ctx->cmd, 0, 1, &ctx->vertices.buffer, offsets);
     vkCmdBindIndexBuffer(ctx->cmd, ctx->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -204,8 +205,8 @@ void _update_source_descriptor_set (VkvgContext ctx){
 
     VkWriteDescriptorSet writeDescriptorSet = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ctx->descriptorSet,
-            .dstBinding = 1,
+            .dstSet = ctx->dsSrc,
+            .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &descSrcTex
@@ -221,7 +222,7 @@ void _update_font_descriptor_set (VkvgContext ctx){
 
     VkWriteDescriptorSet writeDescriptorSet = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ctx->descriptorSet,
+            .dstSet = ctx->dsFont,
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -235,11 +236,13 @@ void _init_descriptor_sets (VkvgContext ctx){
     VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                                                               .descriptorPool = dev->descriptorPool,
                                                               .descriptorSetCount = 1,
-                                                              .pSetLayouts = &dev->descriptorSetLayout };
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->descriptorSet));
+                                                              .pSetLayouts = &dev->dslFont };
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->dsFont));
+    descriptorSetAllocateInfo.pSetLayouts = &dev->dslSrc;
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(dev->vkDev, &descriptorSetAllocateInfo, &ctx->dsSrc));
 }
 void add_line(vkvg_context* ctx, vec2 p1, vec2 p2, vec4 col){
-    Vertex v = {{p1.x,p1.y},col,{0,0,-1}};
+    Vertex v = {{p1.x,p1.y},{0,0,-1}};
     _add_vertex(ctx, v);
     v.pos = p2;
     _add_vertex(ctx, v);

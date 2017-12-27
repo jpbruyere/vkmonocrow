@@ -18,10 +18,12 @@ typedef struct _vkvg_device_t{
     VkPipeline				pipeline_OP_SUB;
     VkPipeline				pipelineWired;
     VkPipeline				pipelineLineList;
+
     VkPipelineCache			pipelineCache;
     VkPipelineLayout		pipelineLayout;
     VkDescriptorPool		descriptorPool;
-    VkDescriptorSetLayout	descriptorSetLayout;
+    VkDescriptorSetLayout	dslFont;
+    VkDescriptorSetLayout	dslSrc;
 
     int		hdpi,
             vdpi;

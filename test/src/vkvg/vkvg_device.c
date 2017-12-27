@@ -35,7 +35,8 @@ VkvgDevice vkvg_device_create(VkDevice vkdev, VkQueue queue, uint32_t qFam, VkPh
 
 void vkvg_device_destroy(VkvgDevice dev)
 {
-    vkDestroyDescriptorSetLayout    (dev->vkDev, dev->descriptorSetLayout,NULL);
+    vkDestroyDescriptorSetLayout    (dev->vkDev, dev->dslFont,NULL);
+    vkDestroyDescriptorSetLayout    (dev->vkDev, dev->dslSrc, NULL);
     vkDestroyDescriptorPool         (dev->vkDev, dev->descriptorPool,NULL);
 
     vkDestroyPipeline               (dev->vkDev, dev->pipeline, NULL);
@@ -220,16 +221,15 @@ void _setupPipelines(VkvgDevice dev)
                 .stride = sizeof(Vertex),
                 .inputRate = VK_VERTEX_INPUT_RATE_VERTEX };
 
-    VkVertexInputAttributeDescription vertexInputAttributs[3] = {
+    VkVertexInputAttributeDescription vertexInputAttributs[2] = {
         {0, 0, VK_FORMAT_R32G32_SFLOAT,         0},
-        {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT,   sizeof(vec2)},
-        {2, 0, VK_FORMAT_R32G32B32_SFLOAT,      sizeof(vec2) + sizeof(vec4)}
+        {1, 0, VK_FORMAT_R32G32B32_SFLOAT,      sizeof(vec2)}
     };
 
     VkPipelineVertexInputStateCreateInfo vertexInputState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 1,
         .pVertexBindingDescriptions = &vertexInputBinding,
-        .vertexAttributeDescriptionCount = 3,
+        .vertexAttributeDescriptionCount = 2,
         .pVertexAttributeDescriptions = vertexInputAttributs };
 
     VkPipelineShaderStageCreateInfo vertStage = { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -293,30 +293,30 @@ void _setupPipelines(VkvgDevice dev)
 
 void _createDescriptorSetLayout (VkvgDevice dev) {
 
-    VkDescriptorSetLayoutBinding dsLayoutBinding[] = {
-        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,VK_SHADER_STAGE_FRAGMENT_BIT},
-        {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,VK_SHADER_STAGE_FRAGMENT_BIT}
-    };
+    VkDescriptorSetLayoutBinding dsLayoutBinding =
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,VK_SHADER_STAGE_FRAGMENT_BIT};
     VkDescriptorSetLayoutCreateInfo dsLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                                                          .bindingCount = 2,
+                                                          .bindingCount = 1,
                                                           .pBindings = &dsLayoutBinding };
-    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(dev->vkDev, &dsLayoutCreateInfo, NULL, &dev->descriptorSetLayout));
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(dev->vkDev, &dsLayoutCreateInfo, NULL, &dev->dslFont));
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(dev->vkDev, &dsLayoutCreateInfo, NULL, &dev->dslSrc));
 
     VkPushConstantRange pushConstantRange[] = {
         {VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(push_constants)},
         //{VK_SHADER_STAGE_FRAGMENT_BIT,0,sizeof(push_constants)}
     };
+    VkDescriptorSetLayout dsls[] = {dev->dslFont,dev->dslSrc};
 
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
                                                             .pushConstantRangeCount = 1,
                                                             .pPushConstantRanges = &pushConstantRange,
-                                                            .setLayoutCount = 1,
-                                                            .pSetLayouts = &dev->descriptorSetLayout };
+                                                            .setLayoutCount = 2,
+                                                            .pSetLayouts = dsls };
     VK_CHECK_RESULT(vkCreatePipelineLayout(dev->vkDev, &pipelineLayoutCreateInfo, NULL, &dev->pipelineLayout));
 }
 
 void _createDescriptorSet (VkvgDevice dev) {
-    VkDescriptorPoolSize descriptorPoolSize = {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 };
+    VkDescriptorPoolSize descriptorPoolSize = {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 };
 
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
                                                             .maxSets = 4,

@@ -506,6 +506,8 @@ int main(int argc, char *argv[]) {
 
     VkvgSurface surf2 = vkvg_surface_create (device,1024,800);;
     VkvgContext ctx = vkvg_create(surf2);
+    VkvgContext ctx2 = vkvg_create(surf);
+    vkvg_destroy(ctx2);
     /*vkvg_destroy(ctx);
     ctx = vkvg_create(surf);
     vkvg_destroy(ctx);

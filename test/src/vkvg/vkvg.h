@@ -15,6 +15,7 @@ typedef enum VkvgDirection {
 typedef struct _vkvg_context_t* VkvgContext;
 typedef struct _vkvg_surface_t* VkvgSurface;
 typedef struct _vkvg_device_t*  VkvgDevice;
+typedef struct _vkvg_pattern_t* VkvgPattern;
 
 VkvgDevice	vkvg_device_create			(VkDevice vkdev, VkQueue queue, uint32_t qFam,
                                         VkPhysicalDeviceMemoryProperties memprops);

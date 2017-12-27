@@ -22,7 +22,8 @@ VkvgContext vkvg_create(VkvgSurface surf)
     push_constants pc = {
             {},
             {2.0f/(float)ctx->pSurf->width,2.0f/(float)ctx->pSurf->height},
-            {-1.f,-1.f}
+            {-1.f,-1.f},
+            VKVG_SRC_SOLID
     };
     ctx->pushConsts = pc;
 
@@ -90,7 +91,8 @@ void vkvg_destroy (VkvgContext ctx)
     vkDestroyFence      (dev, ctx->flushFence,NULL);
     vkFreeCommandBuffers(dev, ctx->pSurf->dev->cmdPool, 1, &ctx->cmd);
 
-    vkFreeDescriptorSets(dev, ctx->pSurf->dev->descriptorPool,1,&ctx->descriptorSet);
+    VkDescriptorSet dss[] = {ctx->dsFont,ctx->dsSrc};
+    vkFreeDescriptorSets(dev, ctx->pSurf->dev->descriptorPool,2,dss);
 
     vkvg_buffer_destroy (&ctx->indices);
     vkvg_buffer_destroy (&ctx->vertices);
@@ -238,7 +240,7 @@ void vkvg_fill_preserve (VkvgContext ctx){
         vkvg_flush(ctx);
 
     uint32_t lastPathPointIdx, i = 0, ptrPath = 0;;
-    Vertex v = {.col = ctx->curRGBA};
+    Vertex v = {};
     v.uv.z = -1;
 
     while (ptrPath < ctx->pathPtr){
@@ -319,7 +321,7 @@ void vkvg_stroke_preserve (VkvgContext ctx)
     if (ctx->pointCount * 4 > ctx->sizeIndices - ctx->indCount)
         vkvg_flush(ctx);
 
-    Vertex v = {.col = ctx->curRGBA};
+    Vertex v = {};
     v.uv.z = -1;
 
     float hw = ctx->lineWidth / 2.0;
@@ -391,10 +393,10 @@ void vkvg_stroke (VkvgContext ctx)
 void _vkvg_fill_rectangle (VkvgContext ctx, float x, float y, float width, float height){
     Vertex v[4] =
     {
-        {{x,y},             ctx->curRGBA,{0,0,-1}},
-        {{x,y+height},      ctx->curRGBA,{0,0,-1}},
-        {{x+width,y},       ctx->curRGBA,{0,0,-1}},
-        {{x+width,y+height},ctx->curRGBA,{0,0,-1}}
+        {{x,y},             {0,0,-1}},
+        {{x,y+height},      {0,0,-1}},
+        {{x+width,y},       {0,0,-1}},
+        {{x+width,y+height},{0,0,-1}}
     };
     uint32_t firstIdx = ctx->vertCount;
     Vertex* pVert = (Vertex*)(ctx->vertices.mapped + ctx->vertCount * sizeof(Vertex));
@@ -408,6 +410,11 @@ void vkvg_paint (VkvgContext ctx){
 
 void vkvg_set_rgba (VkvgContext ctx, float r, float g, float b, float a)
 {
+    vec4 c = {r,g,b,a};
+    ctx->pushConsts.source = c;
+    ctx->pushConsts.srcType = VKVG_SRC_SOLID;
+    vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
+                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants),&ctx->pushConsts);
     ctx->curRGBA.x = r;
     ctx->curRGBA.y = g;
     ctx->curRGBA.z = b;
@@ -455,7 +462,8 @@ void vkvg_set_source_surface(VkvgContext ctx, VkvgSurface surf, float x, float y
     _init_cmd_buff                  (ctx);
 
     vec4 srcRect = {x,y,surf->width,surf->height};
-    ctx->pushConsts.sourceRect = srcRect;
+    ctx->pushConsts.source = srcRect;
+    ctx->pushConsts.srcType = VKVG_SRC_PATTERN;
     vkCmdPushConstants(ctx->cmd, ctx->pSurf->dev->pipelineLayout,
                        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants),&ctx->pushConsts);
 }

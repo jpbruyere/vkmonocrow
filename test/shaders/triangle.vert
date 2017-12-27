@@ -4,8 +4,7 @@
 #extension GL_ARB_shading_language_420pack : enable
 
 layout (location = 0) in vec2 inPos;
-layout (location = 1) in vec4 inColor;
-layout (location = 2) in vec3 inUV;
+layout (location = 1) in vec3 inUV;
 
 layout (location = 0) out vec4 outColor;
 layout (location = 1) out vec3 outUV;
@@ -17,16 +16,20 @@ out gl_PerVertex
 };
 
 layout(push_constant) uniform PushConsts {
-	vec4 sourceRect;
+	vec4 source;
 	vec2 scale;
 	vec2 translate;
+	int  srcType;
 } pushConsts;
 
 void main()
 {
-	outColor = inColor;
 	outUV = inUV;
-	outSrcRect = pushConsts.sourceRect;
+	if (pushConsts.srcType == 0){
+		outSrcRect.z = -1;
+		outColor = pushConsts.source;
+	}else
+		outSrcRect = pushConsts.source;
 
 	gl_Position = vec4(inPos.xy*pushConsts.scale+pushConsts.translate,0.0, 1.0);
 }

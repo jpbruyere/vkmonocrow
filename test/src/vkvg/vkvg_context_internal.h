@@ -17,7 +17,6 @@
 
 typedef struct{
     vec2 pos;
-    vec4 col;
     vec3 uv;
 }Vertex;
 
@@ -27,10 +26,14 @@ typedef struct _ear_clip_point{
     struct _ear_clip_point* next;
 }ear_clip_point;
 
+#define VKVG_SRC_SOLID      0
+#define VKVG_SRC_PATTERN    1
+
 typedef struct {
-    vec4    sourceRect;
+    vec4    source;
     vec2    scale;
     vec2    translate;
+    int     srcType;
 }push_constants;
 
 typedef struct _vkvg_context_save_t{
@@ -67,7 +70,8 @@ typedef struct _vkvg_context_t {
     VkFence			flushFence;
     uint32_t        stencilRef;
     VkhImage        source;
-    VkDescriptorSet	descriptorSet;
+    VkDescriptorSet	dsFont;
+    VkDescriptorSet	dsSrc;
 
     //vk buffers, holds data until flush
     vkvg_buff	indices;

@@ -333,7 +333,7 @@ void _show_text (VkvgContext ctx, const char* text){
         string_width_in_pixels += glyph_pos[i].x_advance >> 6;
 
 
-    Vertex v = {.col = ctx->curRGBA};
+    Vertex v = {};
     vec2 pen = ctx->curPos;
 
     for (int i=0; i < glyph_count; ++i) {
@@ -384,10 +384,10 @@ void _show_text (VkvgContext ctx, const char* text){
 
 void _show_texture (vkvg_context* ctx){
     Vertex vs[] = {
-        {{0,0},                             {1,1,1,1},{0,0,1}},
-        {{0,FONT_PAGE_SIZE},                {1,1,1,1},{0,1,1}},
-        {{FONT_PAGE_SIZE,0},                {1,1,1,1},{1,0,1}},
-        {{FONT_PAGE_SIZE,FONT_PAGE_SIZE},   {1,1,1,1},{1,1,1}}
+        {{0,0},                             {0,0,1}},
+        {{0,FONT_PAGE_SIZE},                {0,1,1}},
+        {{FONT_PAGE_SIZE,0},                {1,0,1}},
+        {{FONT_PAGE_SIZE,FONT_PAGE_SIZE},   {1,1,1}}
     };
 
     _add_vertex(ctx,vs[0]);
