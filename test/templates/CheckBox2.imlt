@@ -1,7 +1,0 @@
-﻿<Label Font="{./Font}" Text="{./Caption}"
-	Margin="3"
-	Background="{./Background}"
-	Foreground="DimGray"
-	TextAlignment="Center"
-	MouseEnter="{Foreground=White}"
-	MouseLeave="{Foreground=DimGray}"/>

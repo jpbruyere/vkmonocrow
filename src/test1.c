@@ -5,9 +5,8 @@
 #include "compute.h"
 #include "vkhelpers.h"
 #include "vkh_buffer.h"
-#include "vkcrow.h"
 
-#include "vkvg/vkvg.h"
+#include "vkvg.h"
 
 VkvgDevice device;
 VkvgSurface surf = NULL;
@@ -402,7 +401,18 @@ void buildCommandBuffers(vkh_presenter* r){
         vkh_cmd_end(cb);
     }
 }
-
+void vkcrow_cmd_copy_submit(VkQueue queue, VkCommandBuffer *pCmdBuff, VkSemaphore* pWaitSemaphore, VkSemaphore* pSignalSemaphore){
+    VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submit_info = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                 .commandBufferCount = 1,
+                                 .signalSemaphoreCount = 1,
+                                 .pSignalSemaphores = pSignalSemaphore,
+                                 .waitSemaphoreCount = 1,
+                                 .pWaitSemaphores = pWaitSemaphore,
+                                 .pWaitDstStageMask = &dstStageMask,
+                                 .pCommandBuffers = pCmdBuff};
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submit_info, NULL));
+}
 void draw(VkEngine* e) {
     vkh_presenter* r = &e->renderer;
     // Get the index of the next available swapchain image:
