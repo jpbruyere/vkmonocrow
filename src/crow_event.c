@@ -41,9 +41,11 @@ CrowEvent* crow_evt_dequeue(){
     pthread_mutex_lock(&crow_event_mutex);
     CrowEvent* next = crow_evt_queue_start;
     if (next){
-        if (crow_evt_queue_start->pNext)
+        if (crow_evt_queue_start->pNext){
             crow_evt_queue_start = crow_evt_queue_start->pNext;
-        else
+            //if (crow_evt_queue_start->eventType == next->eventType)
+            //	next = crow_evt_dequeue();
+        }else
             crow_evt_queue_start = crow_evt_queue_end = NULL;
     }
     pthread_mutex_unlock(&crow_event_mutex);

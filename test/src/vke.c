@@ -158,7 +158,7 @@ void EngineInit (VkEngine* e) {
 
     VK_CHECK_RESULT(vkCreateInstance (&inst_info, NULL, &e->inst));
 
-    e->phy = vkh_find_phy (e->inst, VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+    e->phy = vkh_find_phy (e->inst, VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
 
     vkGetPhysicalDeviceMemoryProperties(e->phy, &e->memory_properties);
     vkGetPhysicalDeviceProperties(e->phy, &e->gpu_props);

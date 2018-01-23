@@ -4,6 +4,7 @@
 #include "cairo_mono_embed.h"
 
 #include <sys/time.h>
+#include <unistd.h>
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
@@ -197,7 +198,7 @@ void _main_loop(){
         double elapsed = (frame.tv_sec - lastFrame.tv_sec) * 1000.0;      // sec to ms
         elapsed += (frame.tv_usec - lastFrame.tv_usec) / 1000.0;
 
-        if (elapsed > 3.0){
+        if (elapsed > 20.0){
             lastFrame = frame;
 
             struct timeval t1, t2;
@@ -205,7 +206,12 @@ void _main_loop(){
             gettimeofday(&t1, NULL);
 
             exception = NULL;
+
+            //*********
+            //* CROW update cycle
             mono_runtime_invoke (update, objIface, NULL, &exception);
+            //*********
+
             if (exception)
                 _printException(exception);
 
@@ -214,6 +220,7 @@ void _main_loop(){
             elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
             char strElapsed[100];
             sprintf(strElapsed, "%lf", elapsedTime);
+
             _crow_notify_value_changed("update", strElapsed);
             _crow_notify_value_changed_d("fpsMin", elapsedTime);
         }
